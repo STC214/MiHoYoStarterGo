@@ -1,0 +1,125 @@
+/* 基础重置 */
+body, html, #app {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+}
+
+/* Darcula 主题变量 */
+.theme-darcula {
+    --bg-app: #2B2B2B;
+    --bg-header: #3C3F41;
+    --bg-card: #323232;
+    --text-main: #A9B7C6;
+    --text-dim: #777777;
+    --accent: #4A86E8;
+    --border: #282828;
+    --btn-hover: #4B4B4B;
+}
+
+/* Monokai 主题变量 */
+.theme-monokai {
+    --bg-app: #272822;
+    --bg-header: #1e1f1c;
+    --bg-card: #3e3d32;
+    --text-main: #F8F8F2;
+    --text-dim: #75715e;
+    --accent: #A6E22E;
+    --border: #141411;
+    --btn-hover: #49483e;
+}
+
+.container {
+    background-color: var(--bg-app);
+    color: var(--text-main);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* 标题栏 */
+.title-bar {
+    height: 35px;
+    background: var(--bg-header);
+    display: flex;
+    align-items: center;
+    padding: 0 15px;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+/* 菜单栏 */
+.menu-bar {
+    height: 30px;
+    background: var(--bg-header);
+    display: flex;
+    gap: 20px;
+    padding: 0 15px;
+    align-items: center;
+    font-size: 13px;
+    cursor: default;
+}
+
+.menu-item:hover { color: var(--accent); }
+
+/* 标签栏 */
+.tab-bar {
+    display: flex;
+    padding: 5px 10px 0;
+    gap: 5px;
+    background: var(--bg-header);
+}
+
+.tab {
+    padding: 8px 15px;
+    background: var(--bg-app);
+    border-radius: 5px 5px 0 0;
+    cursor: pointer;
+    font-size: 13px;
+    opacity: 0.6;
+}
+
+.tab.active {
+    opacity: 1;
+    border-bottom: 2px solid var(--accent);
+}
+
+/* 内容区 */
+.content-area {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.account-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 15px;
+}
+
+.account-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 15px;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.info .alias { font-weight: bold; margin-bottom: 5px; }
+.info .details { font-size: 12px; color: var(--text-dim); cursor: pointer; }
+
+.btn-primary {
+    background: var(--accent);
+    color: #000;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+.btn-primary:hover { opacity: 0.8; }

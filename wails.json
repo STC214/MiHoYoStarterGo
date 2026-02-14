@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "MiHoYoStarterGo",
+  "outputfilename": "MiHoYoStarterGo",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "STC214",
+    "email": "2833104901@qq.com"
+  }
+}
