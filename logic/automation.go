@@ -18,16 +18,16 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// StartAutomationMonitor 核心監控邏輯
-// 新增了 cancel *bool 參數用於接收用戶的手動停止指令
+// StartAutomationMonitor 核心监控逻辑
+// 新增了 cancel *bool 参数用于接收用户的手动停止指令
 func StartAutomationMonitor(ctx context.Context, gameID, user, pwd string, isFirst bool, pause *bool, cancel *bool) {
 	rand.Seed(time.Now().UnixNano())
 
 	go func() {
-		fmt.Printf("[系統] 監控啟動：正在為賬號 %s 監視登錄狀態...\n", user)
-		tmpImgPath := fmt.Sprintf("temp_%d.png", time.Now().Unix()) // 使用動態文件名避免衝突
+		fmt.Printf("[系统] 监控启动：正在为账号 %s 监视登录状态...\n", user)
+		tmpImgPath := fmt.Sprintf("temp_%d.png", time.Now().Unix()) // 使用动态文件名避免冲突
 
-		// 根據遊戲 ID 確定窗口標題
+		// 根据游戏 ID 确定窗口标题
 		windowName := "原神"
 		if gameID == "StarRailCN" {
 			windowName = "崩坏：星穹铁道"
@@ -38,27 +38,27 @@ func StartAutomationMonitor(ctx context.Context, gameID, user, pwd string, isFir
 		ticker := time.NewTicker(1200 * time.Millisecond)
 		defer func() {
 			ticker.Stop()
-			os.Remove(tmpImgPath) // 協程結束時清理臨時圖片資源
+			os.Remove(tmpImgPath) // 协程结束时清理临时图片资源
 		}()
 
 		for range ticker.C {
-			// 1. [新增] 檢查手動取消信號
+			// 1. [新增] 检查手动取消信号
 			if *cancel {
-				fmt.Printf("[系統] 接收到用戶終止信號，已回收 OCR 資源並關閉協程。\n")
-				return // 徹底退出協程
+				fmt.Printf("[系统] 接收到用户终止信号，已回收 OCR 资源并关闭协程。\n")
+				return // 彻底退出协程
 			}
 
-			// 2. 檢查暫停狀態
+			// 2. 检查暂停状态
 			if *pause {
 				continue
 			}
 
-			// 3. 檢查進程是否運行
+			// 3. 检查进程是否运行
 			if !IsGameRunning(gameID) {
 				continue
 			}
 
-			// 4. 尋找窗口句柄並置頂
+			// 4. 寻找窗口句柄并置顶
 			hwnd := win.FindWindow(nil, syscall.StringToUTF16Ptr(windowName))
 			var rect win.RECT
 			if hwnd != 0 {
@@ -69,7 +69,7 @@ func StartAutomationMonitor(ctx context.Context, gameID, user, pwd string, isFir
 				continue
 			}
 
-			// 5. 截圖
+			// 5. 截图
 			img, err := CaptureWindow(windowName)
 			if err != nil {
 				continue
@@ -81,41 +81,41 @@ func StartAutomationMonitor(ctx context.Context, gameID, user, pwd string, isFir
 			png.Encode(f, img)
 			f.Close()
 
-			// 6. OCR 識別
+			// 6. OCR 识别
 			textPoints, err := RecognizeWithPos(tmpImgPath)
 			if err != nil {
 				continue
 			}
 
-			// 7. 判定畫面 B (登錄框) 並執行填充
+			// 7. 判定画面 B (登录框) 并执行填充
 			if isImageBStrict(textPoints) {
-				fmt.Println("[流水線] 檢測到登錄界面，開始執行賬密填充...")
+				fmt.Println("[流水线] 检测到登录界面，开始执行账密填充...")
 				executeFullSequence(windowName, textPoints, user, pwd)
 			}
 
-			// 8. 判定畫面 A (進入遊戲成功) 並提取 Token
+			// 8. 判定画面 A (进入游戏成功) 并提取 Token
 			windowHeight := int(rect.Bottom - rect.Top)
 			if isConfirmedImageA(textPoints, windowHeight) {
 				fmt.Println("========================================")
-				fmt.Println(" [驗證成功] 已登錄成功，正在提取數據...")
+				fmt.Println(" [验证成功] 已登录成功，正在提取数据...")
 
 				err := finalizeAccountStorage(gameID, user)
 
 				if err != nil {
-					fmt.Printf(" [錯誤] 數據存檔失敗: %v\n", err)
+					fmt.Printf(" [错误] 数据存档失败: %v\n", err)
 					runtime.EventsEmit(ctx, "monitor_finished", "FAILED")
 				} else {
-					fmt.Println(" [成功] 數據已更新至 config.json")
+					fmt.Println(" [成功] 数据已更新至 config.json")
 					runtime.EventsEmit(ctx, "monitor_finished", "SUCCESS")
 				}
 				fmt.Println("========================================")
-				return // 任務完成，退出協程
+				return // 任务完成，退出协程
 			}
 		}
 	}()
 }
 
-// ---------------- 判定與數據存儲邏輯 ----------------
+// ---------------- 判定与数据存储逻辑 ----------------
 
 func isImageBStrict(points []TextPoint) bool {
 	hasAccountField := false
@@ -151,7 +151,7 @@ func isConfirmedImageA(points []TextPoint, windowHeight int) bool {
 }
 
 func finalizeAccountStorage(gameID, username string) error {
-	// 延遲讀取註冊表，確保遊戲已經把最新數據寫進去
+	// 延迟读取注册表，确保游戏已经把最新数据写进去
 	time.Sleep(2 * time.Second)
 
 	tokenBytes, err := ReadToken(gameID)
@@ -180,7 +180,7 @@ func finalizeAccountStorage(gameID, username string) error {
 	return SaveConfig(cfg)
 }
 
-// ---------------- 鍵鼠模擬執行 ----------------
+// ---------------- 键鼠模拟执行 ----------------
 
 func executeFullSequence(windowName string, points []TextPoint, user, pwd string) {
 	hwnd := win.FindWindow(nil, syscall.StringToUTF16Ptr(windowName))
@@ -188,7 +188,7 @@ func executeFullSequence(windowName string, points []TextPoint, user, pwd string
 	win.GetWindowRect(hwnd, &rect)
 	left, top := int(rect.Left), int(rect.Top)
 
-	// 1. 填寫賬號密碼
+	// 1. 填写账号密码
 	for _, p := range points {
 		if strings.Contains(p.Text, "手机号") || strings.Contains(p.Text, "邮箱") {
 			randClick(left+p.X, top+p.Y, 10, 2)
@@ -200,7 +200,7 @@ func executeFullSequence(windowName string, points []TextPoint, user, pwd string
 		}
 	}
 
-	// 2. 勾選協議 (找特定的圓形符號)
+	// 2. 勾选协议 (找特定的圆形符号)
 	for _, p := range points {
 		if strings.Contains(p.Text, "同意") && (strings.HasPrefix(p.Text, "①") || strings.HasPrefix(p.Text, "○") || strings.HasPrefix(p.Text, "〇")) {
 			charCount := utf8.RuneCountInString(p.Text)
@@ -212,7 +212,7 @@ func executeFullSequence(windowName string, points []TextPoint, user, pwd string
 		}
 	}
 
-	// 3. 點擊進入/登錄
+	// 3. 点击进入/登录
 	for _, p := range points {
 		if (strings.Contains(p.Text, "进入") || strings.Contains(p.Text, "开始")) && len(p.Text) <= 12 {
 			randClick(left+p.X, top+p.Y+5, 15, 5)
@@ -220,7 +220,7 @@ func executeFullSequence(windowName string, points []TextPoint, user, pwd string
 	}
 }
 
-// ---------------- 基礎工具函數 ----------------
+// ---------------- 基础工具函数 ----------------
 
 func containsChinese(s string) bool {
 	for _, r := range s {

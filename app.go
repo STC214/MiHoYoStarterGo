@@ -5,18 +5,18 @@ import (
 	"fmt"
 	"time"
 
-	// 這裡的路徑必須與 go.mod 中的 module 名一致
+	// 这里的路径必须与 go.mod 中的 module 名一致
 	"MiHoYoStarterGo/logic"
 )
 
 // App struct
 type App struct {
 	ctx          context.Context
-	IsPaused     bool // 用於全局控制自動化的暫停狀態
-	ShouldCancel bool // [新增] 用於全局控制自動化的取消信號
+	IsPaused     bool // 用于全局控制自动化的暂停状态
+	ShouldCancel bool // [新增] 用于全局控制自动化的取消信号
 }
 
-// NewApp 創建 App 實例
+// NewApp 创建 App 实例
 func NewApp() *App {
 	return &App{
 		IsPaused:     false,
@@ -24,39 +24,39 @@ func NewApp() *App {
 	}
 }
 
-// startup 在 Wails 啟動時運行
+// startup 在 Wails 启动时运行
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
-// --- 調試與狀態管理 ---
+// --- 调试与状态管理 ---
 
-// TogglePause 供前端調用：切換暫停/繼續狀態
+// TogglePause 供前端调用：切换暂停/继续状态
 func (a *App) TogglePause() string {
 	a.IsPaused = !a.IsPaused
 	if a.IsPaused {
-		fmt.Println(">> [App] 自動化監控已手動暫停")
-		return "已暫停"
+		fmt.Println(">> [App] 自动化监控已手动暂停")
+		return "已暂停"
 	}
-	fmt.Println(">> [App] 自動化監控已恢復運行")
-	return "運行中"
+	fmt.Println(">> [App] 自动化监控已恢复运行")
+	return "运行中"
 }
 
-// StopMonitor [新增] 供前端調用：手動終止自動化流程並回收資源
+// StopMonitor [新增] 供前端调用：手动终止自动化流程并回收资源
 func (a *App) StopMonitor() string {
 	a.ShouldCancel = true
-	fmt.Println(">> [App] 用戶手動觸發了終止信號，正在關閉監控協程...")
+	fmt.Println(">> [App] 用户手动触发了终止信号，正在关闭监控协程...")
 	return "SUCCESS"
 }
 
-// --- 配置與主題管理 ---
+// --- 配置与主题管理 ---
 
-// GetSettings 獲取初始化配置
+// GetSettings 获取初始化配置
 func (a *App) GetSettings() (*logic.ConfigData, error) {
 	return logic.LoadConfig()
 }
 
-// SaveTheme 切換並保存主題
+// SaveTheme 切换并保存主题
 func (a *App) SaveTheme(themeName string) string {
 	cfg, err := logic.LoadConfig()
 	if err != nil {
@@ -69,18 +69,18 @@ func (a *App) SaveTheme(themeName string) string {
 	return "Success"
 }
 
-// --- 賬號管理邏輯 ---
+// --- 账号管理逻辑 ---
 
-// AddAccount 添加新賬號
+// AddAccount 添加新账号
 func (a *App) AddAccount(alias, username, password, gameID string) string {
 	cfg, err := logic.LoadConfig()
 	if err != nil {
-		return "FAILED: 無法加載配置文件"
+		return "FAILED: 无法加载配置文件"
 	}
 
 	encPwd, err := logic.EncryptString(password)
 	if err != nil {
-		return "FAILED: 加密失敗"
+		return "FAILED: 加密失败"
 	}
 
 	newAcc := logic.Account{
@@ -95,16 +95,16 @@ func (a *App) AddAccount(alias, username, password, gameID string) string {
 
 	cfg.Accounts = append(cfg.Accounts, newAcc)
 	if err := logic.SaveConfig(cfg); err != nil {
-		return "FAILED: 保存失敗"
+		return "FAILED: 保存失败"
 	}
 	return "SUCCESS"
 }
 
-// DeleteAccount [新增] 根據 ID 刪除賬號
+// DeleteAccount [新增] 根据 ID 删除账号
 func (a *App) DeleteAccount(id string) string {
 	cfg, err := logic.LoadConfig()
 	if err != nil {
-		return "FAILED: 無法讀取配置"
+		return "FAILED: 无法读取配置"
 	}
 
 	var newAccounts []logic.Account
@@ -118,14 +118,14 @@ func (a *App) DeleteAccount(id string) string {
 	}
 
 	if !found {
-		return "FAILED: 未找到該賬號"
+		return "FAILED: 未找到该账号"
 	}
 
 	cfg.Accounts = newAccounts
 	if err := logic.SaveConfig(cfg); err != nil {
-		return "FAILED: 保存失敗"
+		return "FAILED: 保存失败"
 	}
-	fmt.Printf(">> [App] 賬號 ID %s 已成功刪除\n", id)
+	fmt.Printf(">> [App] 账号 ID %s 已成功删除\n", id)
 	return "SUCCESS"
 }
 
@@ -133,52 +133,52 @@ func (a *App) DeleteAccount(id string) string {
 func (a *App) GetPlaintext(encryptedText string) string {
 	decrypted, err := logic.DecryptString(encryptedText)
 	if err != nil {
-		return "解密失敗"
+		return "解密失败"
 	}
 	return decrypted
 }
 
-// ExportBackup 導出明文 JSON 備份
+// ExportBackup 导出明文 JSON 备份
 func (a *App) ExportBackup() string {
 	cfg, err := logic.LoadConfig()
 	if err != nil {
-		return "FAILED: 無法加載配置"
+		return "FAILED: 无法加载配置"
 	}
 	fileName, err := logic.ExportPlaintextBackup(cfg)
 	if err != nil {
 		return "FAILED: " + err.Error()
 	}
-	return "SUCCESS: 已導出至 " + fileName
+	return "SUCCESS: 已导出至 " + fileName
 }
 
-// --- 核心切換與自動化調度 ---
+// --- 核心切换与自动化调度 ---
 
-// RequestSwitch 核心業務邏輯
+// RequestSwitch 核心业务逻辑
 func (a *App) RequestSwitch(acc logic.Account) string {
-	// 1. 進程檢查：如果遊戲正在運行，返回衝突狀態碼
+	// 1. 进程检查：如果游戏正在运行，返回冲突状态码
 	if logic.IsGameRunning(acc.GameID) {
-		fmt.Printf(">> [App] 檢測到遊戲 %s 正在運行，觸發衝突處理\n", acc.GameID)
+		fmt.Printf(">> [App] 检测到游戏 %s 正在运行，触发冲突处理\n", acc.GameID)
 		return "RUNNING_CONFLICT"
 	}
 
-	// 2. 遊戲未運行，執行正常啟動監控
+	// 2. 游戏未运行，执行正常启动监控
 	return a.ForceStartMonitor(acc)
 }
 
-// ForceStartMonitor 強制開啟監控
+// ForceStartMonitor 强制开启监控
 func (a *App) ForceStartMonitor(acc logic.Account) string {
-	// 解密密碼
+	// 解密密码
 	realPwd, err := logic.DecryptString(acc.Password)
 	if err != nil {
-		return "FAILED: 賬號解密失敗。"
+		return "FAILED: 账号解密失败。"
 	}
 
-	// [重要] 重置信號狀態
+	// [重要] 重置信号状态
 	a.IsPaused = false
 	a.ShouldCancel = false
 
-	// 啟動自動化監控協程
-	// 這裡傳遞了 a.ctx (用於事件), &a.IsPaused (用於暫停), &a.ShouldCancel (用於終止)
+	// 启动自动化监控协程
+	// 这里传递了 a.ctx (用于事件), &a.IsPaused (用于暂停), &a.ShouldCancel (用于终止)
 	go logic.StartAutomationMonitor(
 		a.ctx,
 		acc.GameID,
@@ -189,6 +189,6 @@ func (a *App) ForceStartMonitor(acc logic.Account) string {
 		&a.ShouldCancel,
 	)
 
-	fmt.Printf(">> [App] 賬號 %s 的自動化監控已啟動\n", acc.Alias)
+	fmt.Printf(">> [App] 账号 %s 的自动化监控已启动\n", acc.Alias)
 	return "SUCCESS"
 }

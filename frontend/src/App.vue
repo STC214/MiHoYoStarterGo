@@ -1,16 +1,16 @@
 <template>
   <div :class="['container', settings.theme]">
     <header class="title-bar" style="--wails-draggable:drag">
-      <span>米哈遊啟動器增強版 (Go + Vue3)</span>
+      <span>米哈游启动器增强版 (Go + Vue3)</span>
       <div v-if="showStatusModal" class="status-indicator-mini">
-        監控中: <span :class="pauseStatus === '運行中' ? 'text-green' : 'text-red'">{{ pauseStatus }}</span>
+        监控中: <span :class="pauseStatus === '运行中' ? 'text-green' : 'text-red'">{{ pauseStatus }}</span>
       </div>
     </header>
 
     <nav class="menu-bar">
-      <div class="menu-item" @click="toggleTheme">🎨 切換主題</div>
-      <div class="menu-item" @click="handleExport">📥 導出備份</div>
-      <div class="menu-item" @click="openAddModal">➕ 添加賬號</div>
+      <div class="menu-item" @click="toggleTheme">🎨 切换主题</div>
+      <div class="menu-item" @click="handleExport">📥 导出备份</div>
+      <div class="menu-item" @click="openAddModal">➕ 添加账号</div>
     </nav>
 
     <div class="tab-bar">
@@ -36,13 +36,13 @@
               🔑 {{ acc.showPlain ? acc.plainText : '••••••••' }}
             </div>
             <div class="token-tag" :class="acc.token ? 'has-token' : 'no-token'">
-              {{ acc.token ? '✅ 已保存 Token' : '❌ 待首次登錄' }}
+              {{ acc.token ? '✅ 已保存 Token' : '❌ 待首次登录' }}
             </div>
           </div>
           
           <div class="card-actions">
-            <button class="btn-primary" @click="runSwitch(acc)">切換並登錄</button>
-            <button class="btn-delete-mini" @click="handleDelete(acc)" title="刪除賬號">🗑️</button>
+            <button class="btn-primary" @click="runSwitch(acc)">切换并登录</button>
+            <button class="btn-delete-mini" @click="handleDelete(acc)" title="删除账号">🗑️</button>
           </div>
         </div>
       </div>
@@ -50,33 +50,33 @@
 
     <div v-if="showAddModal" class="modal-overlay">
       <div class="modal-content">
-        <h3>添加新賬號</h3>
+        <h3>添加新账号</h3>
         <div class="form-group">
-          <label>別名</label>
-          <input v-model="newAcc.alias" placeholder="如：大號" />
+          <label>别名</label>
+          <input v-model="newAcc.alias" placeholder="如：大号" />
         </div>
         <div class="form-group">
-          <label>遊戲賬號</label>
-          <input v-model="newAcc.username" placeholder="手機號/郵箱" />
+          <label>游戏账号</label>
+          <input v-model="newAcc.username" placeholder="手机号/邮箱" />
         </div>
         <div class="form-group">
-          <label>遊戲密碼</label>
-          <input v-model="newAcc.password" type="password" placeholder="請輸入密碼" />
+          <label>游戏密码</label>
+          <input v-model="newAcc.password" type="password" placeholder="请输入密码" />
         </div>
         <div class="modal-actions">
           <button @click="showAddModal = false">取消</button>
-          <button class="btn-primary" @click="handleAdd">確認添加</button>
+          <button class="btn-primary" @click="handleAdd">确认添加</button>
         </div>
       </div>
     </div>
 
     <div v-if="showConflictModal" class="modal-overlay">
       <div class="modal-content conflict-modal">
-        <h3>⚠️ 檢測到遊戲正在運行</h3>
-        <p class="status-tip">若遊戲已在登錄界面，可點擊直接監控。</p>
+        <h3>⚠️ 检测到游戏正在运行</h3>
+        <p class="status-tip">若游戏已在登录界面，可点击直接监控。</p>
         <div class="modal-actions full-width">
           <button class="btn-primary" @click="handleDirectMonitor">
-            直接開始監控
+            直接开始监控
           </button>
           <button class="btn-secondary" @click="showConflictModal = false">
             取消
@@ -88,21 +88,21 @@
     <div v-if="showStatusModal" class="modal-overlay">
       <div class="modal-content status-modal">
         <div class="loader"></div>
-        <h3>自動化監控中</h3>
-        <p class="status-tip">正在等待識別遊戲畫面...</p>
+        <h3>自动化监控中</h3>
+        <p class="status-tip">正在等待识别游戏画面...</p>
         <div class="status-box">
-          當前狀態：<span :class="pauseStatus === '運行中' ? 'text-green' : 'text-red'">{{ pauseStatus }}</span>
+          当前状态：<span :class="pauseStatus === '运行中' ? 'text-green' : 'text-red'">{{ pauseStatus }}</span>
         </div>
         <div class="modal-actions full-width">
           <button class="btn-secondary" @click="handleTogglePause">
-            {{ pauseStatus === '運行中' ? '⏸️ 暫停' : '▶️ 繼續' }}
+            {{ pauseStatus === '运行中' ? '⏸️ 暂停' : '▶️ 继续' }}
           </button>
           
           <button class="btn-danger" @click="handleStopMonitor">
-            🛑 停止並取消監控
+            🛑 停止并取消监控
           </button>
           
-          <button @click="showStatusModal = false">隱藏視窗</button>
+          <button @click="showStatusModal = false">隐藏视窗</button>
         </div>
       </div>
     </div>
@@ -114,32 +114,32 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import * as AppSync from '../wailsjs/go/main/App' 
 import { EventsOn } from '../wailsjs/runtime/runtime'
 
-// 從模塊中解構方法，新增 DeleteAccount
+// 从模块中解构方法，新增 DeleteAccount
 const { 
   GetSettings, SaveTheme, AddAccount, GetPlaintext, 
   ExportBackup, RequestSwitch, ForceStartMonitor, TogglePause,
-  StopMonitor = () => { console.warn("StopMonitor 方法未在後端定義") },
-  DeleteAccount = () => { console.warn("DeleteAccount 方法未在後端定義") }
+  StopMonitor = () => { console.warn("StopMonitor 方法未在后端定义") },
+  DeleteAccount = () => { console.warn("DeleteAccount 方法未在后端定义") }
 } = AppSync
 
 const settings = reactive({ theme: 'theme-darcula', accounts: [] })
 const activeTab = ref('GenshinCN')
 const games = [
   { id: 'GenshinCN', name: '原神' },
-  { id: 'StarRailCN', name: '星穹鐵道' },
-  { id: 'ZZZCN', name: '絕區零' }
+  { id: 'StarRailCN', name: '星穹铁道' },
+  { id: 'ZZZCN', name: '绝区零' }
 ]
 
 const showAddModal = ref(false)
 const showStatusModal = ref(false)
 const showConflictModal = ref(false)
-const pauseStatus = ref('運行中')
+const pauseStatus = ref('运行中')
 const pendingAcc = ref(null)
 
 const newAcc = reactive({ alias: '', username: '', password: '' })
 
 const filteredAccounts = computed(() => {
-  // 對應後端邏輯：根據 game_id 分類顯示
+  // 对应后端逻辑：根据 game_id 分类显示
   return settings.accounts ? settings.accounts.filter(a => a.game_id === activeTab.value) : []
 })
 
@@ -149,7 +149,7 @@ const loadAll = async () => {
     settings.theme = cfg.theme
     settings.accounts = cfg.accounts || []
   } catch (e) {
-    console.error("無法加載設置:", e)
+    console.error("无法加载设置:", e)
   }
 }
 
@@ -165,7 +165,7 @@ const runSwitch = async (acc) => {
     pendingAcc.value = acc
     showConflictModal.value = true
   } else if (res === 'SUCCESS') {
-    pauseStatus.value = '運行中'
+    pauseStatus.value = '运行中'
     showStatusModal.value = true
   }
 }
@@ -183,21 +183,21 @@ const handleTogglePause = async () => {
 }
 
 const handleStopMonitor = async () => {
-  if (confirm("確定要停止監控嗎？這將釋放 OCR 資源並停止自動化流程。")) {
+  if (confirm("确定要停止监控吗？这将释放 OCR 资源并停止自动化流程。")) {
     await StopMonitor()
     showStatusModal.value = false
     pendingAcc.value = null
   }
 }
 
-// 新增：處理賬號刪除邏輯
+// 新增：处理账号删除逻辑
 const handleDelete = async (acc) => {
-  if (confirm(`確定要刪除賬號 [${acc.alias}] 嗎？此操作不可恢復。`)) {
+  if (confirm(`确定要删除账号 [${acc.alias}] 吗？此操作不可恢复。`)) {
     const res = await DeleteAccount(acc.id)
     if (res === 'SUCCESS') {
-      await loadAll() // 刪除成功後刷新列表
+      await loadAll() // 删除成功后刷新列表
     } else {
-      alert("刪除失敗: " + res)
+      alert("删除失败: " + res)
     }
   }
 }

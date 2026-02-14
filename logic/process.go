@@ -6,9 +6,9 @@ import (
 	"github.com/shirou/gopsutil/v3/process"
 )
 
-// IsGameRunning 檢查遊戲進程是否存在
+// IsGameRunning 检查游戏进程是否存在
 func IsGameRunning(gameType string) bool {
-	// 映射遊戲名到進程名
+	// 映射游戏名到进程名
 	processMap := map[string]string{
 		"GenshinCN":  "YuanShen.exe",
 		"GenshinOS":  "GenshinImpact.exe",

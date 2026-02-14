@@ -16,7 +16,7 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:  "米哈遊啟動器增強版",
+		Title:  "米哈游启动器增强版",
 		Width:  1024,
 		Height: 768,
 		AssetServer: &assetserver.Options{
