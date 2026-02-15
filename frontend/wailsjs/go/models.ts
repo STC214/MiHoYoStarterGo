@@ -30,6 +30,10 @@ export namespace logic {
 	    theme: string;
 	    enabled_tags: string[];
 	    accounts: Account[];
+	    window_width: number;
+	    window_height: number;
+	    window_x: number;
+	    window_y: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new ConfigData(source);
@@ -40,6 +44,10 @@ export namespace logic {
 	        this.theme = source["theme"];
 	        this.enabled_tags = source["enabled_tags"];
 	        this.accounts = this.convertValues(source["accounts"], Account);
+	        this.window_width = source["window_width"];
+	        this.window_height = source["window_height"];
+	        this.window_x = source["window_x"];
+	        this.window_y = source["window_y"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

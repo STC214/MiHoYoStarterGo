@@ -24,11 +24,15 @@ type Account struct {
 	CreateTime   int64  `json:"create_time"`
 }
 
-// ConfigData 整体配置文件结构
+// ConfigData 整体配置文件结构 [新增窗口状态字段]
 type ConfigData struct {
-	Theme       string    `json:"theme"` // theme-darcula 或 theme-monokai
-	EnabledTags []string  `json:"enabled_tags"`
-	Accounts    []Account `json:"accounts"`
+	Theme        string    `json:"theme"` // theme-darcula 或 theme-monokai
+	EnabledTags  []string  `json:"enabled_tags"`
+	Accounts     []Account `json:"accounts"`
+	WindowWidth  int       `json:"window_width"`  // 窗口宽度
+	WindowHeight int       `json:"window_height"` // 窗口高度
+	WindowX      int       `json:"window_x"`      // 窗口 X 坐标
+	WindowY      int       `json:"window_y"`      // 窗口 Y 坐标
 }
 
 const configFileName = "config.json"
@@ -89,7 +93,13 @@ func LoadConfig() (*ConfigData, error) {
 	file, err := os.ReadFile(configFileName)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &ConfigData{Theme: "theme-darcula", EnabledTags: []string{"GenshinCN"}}, nil
+			// 默认初始化配置，给定默认窗口大小
+			return &ConfigData{
+				Theme:        "theme-darcula",
+				EnabledTags:  []string{"GenshinCN"},
+				WindowWidth:  1024,
+				WindowHeight: 768,
+			}, nil
 		}
 		return nil, err
 	}
