@@ -1,58 +1,148 @@
-/* Modals.css */
-.modal-overlay { 
-  position: fixed; 
-  top: 0; 
-  left: 0; 
-  width: 100vw; 
-  height: 100vh; 
-  background: rgba(0,0,0,0.7); 
-  display: flex !important; 
-  align-items: center !important; 
-  justify-content: center !important; 
-  z-index: 9999; 
-  backdrop-filter: blur(4px); 
+﻿/* Modals.css */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  padding: 16px;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 9999;
+  backdrop-filter: blur(4px);
 }
 
-.modal-content { 
-  background: var(--bg-card); 
-  padding: 25px; 
-  border-radius: 12px; 
-  width: 85%; 
-  max-width: 420px; 
-  max-height: 85vh; 
-  overflow-y: auto; 
-  border: 1px solid var(--border); 
-  box-shadow: 0 20px 60px rgba(0,0,0,0.6); 
+.modal-content {
+  background: var(--bg-card);
+  padding: 25px;
+  border-radius: 12px;
+  width: min(560px, 100%);
+  max-height: min(85vh, 720px);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
   color: var(--text);
 }
 
-.path-input-group { display: flex; gap: 8px; }
-.path-input-group input { 
-  flex: 1; 
-  background: var(--bg-app); 
-  border: 1px solid var(--border); 
+.path-input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.path-input-group input {
+  flex: 1;
+  background: var(--bg-app);
+  border: 1px solid var(--border);
   color: var(--text);
   padding: 8px;
   border-radius: 4px;
+  min-width: 0;
 }
-.btn-browse { background: #444; color: #eee; border: 1px solid var(--border); padding: 0 12px; cursor: pointer; }
-.btn-browse:hover { background: #555; }
 
-.status-box { background: var(--bg-app); padding: 12px; border-radius: 6px; margin: 15px 0; border: 1px dashed var(--border); text-align: center; }
-.loader { border: 3px solid var(--border); border-top: 3px solid var(--primary); border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto 10px; }
-@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+.btn-browse {
+  background: #444;
+  color: #eee;
+  border: 1px solid var(--border);
+  padding: 0 12px;
+  cursor: pointer;
+}
 
-.form-group { margin-bottom: 15px; display: flex; flex-direction: column; }
-.form-group label { font-size: 12px; margin-bottom: 5px; color: var(--text-dim); }
-.form-group input { padding: 10px; background: var(--bg-app); border: 1px solid var(--border); color: var(--text); border-radius: 4px; }
+.btn-browse:hover {
+  background: #555;
+}
 
-.modal-actions { margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px; }
-.full-width { width: 100%; flex-direction: column; display: flex; gap: 10px; }
-.full-width button { width: 100%; text-align: center; }
+.status-box {
+  background: var(--bg-app);
+  padding: 12px;
+  border-radius: 6px;
+  margin: 15px 0;
+  border: 1px dashed var(--border);
+  text-align: center;
+}
 
-.text-green { color: #4caf50; }
-.text-red { color: #f44336; }
-.status-tip { color: var(--primary); font-weight: bold; text-align: center; margin: 10px 0; }
+.loader {
+  border: 3px solid var(--border);
+  border-top: 3px solid var(--primary);
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 10px;
+}
 
-.fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.form-group {
+  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  font-size: 12px;
+  margin-bottom: 5px;
+  color: var(--text-dim);
+}
+
+.form-group input {
+  padding: 10px;
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+}
+
+.modal-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.full-width {
+  width: 100%;
+  flex-direction: column;
+  display: flex;
+  gap: 10px;
+}
+
+.full-width button {
+  width: 100%;
+  text-align: center;
+}
+
+.text-green {
+  color: #4caf50;
+}
+
+.text-red {
+  color: #f44336;
+}
+
+.status-tip {
+  color: var(--primary);
+  font-weight: bold;
+  text-align: center;
+  margin: 10px 0;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}

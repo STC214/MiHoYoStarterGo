@@ -10,8 +10,16 @@ export function DeleteAccount(arg1) {
   return window['go']['main']['App']['DeleteAccount'](arg1);
 }
 
+export function ExecuteLoginAction(arg1, arg2) {
+  return window['go']['main']['App']['ExecuteLoginAction'](arg1, arg2);
+}
+
 export function ExportBackup() {
   return window['go']['main']['App']['ExportBackup']();
+}
+
+export function GetMonitorStatus() {
+  return window['go']['main']['App']['GetMonitorStatus']();
 }
 
 export function GetPlaintext(arg1) {
@@ -30,10 +38,6 @@ export function PrepareAccountEnvironment(arg1) {
   return window['go']['main']['App']['PrepareAccountEnvironment'](arg1);
 }
 
-export function RunMonitor(arg1) {
-  return window['go']['main']['App']['RunMonitor'](arg1);
-}
-
 export function SaveGamePaths(arg1) {
   return window['go']['main']['App']['SaveGamePaths'](arg1);
 }
@@ -50,10 +54,14 @@ export function StartGame(arg1) {
   return window['go']['main']['App']['StartGame'](arg1);
 }
 
+export function StartMonitor(arg1) {
+  return window['go']['main']['App']['StartMonitor'](arg1);
+}
+
 export function StopMonitor() {
   return window['go']['main']['App']['StopMonitor']();
 }
 
-export function TogglePause() {
-  return window['go']['main']['App']['TogglePause']();
+export function TogglePauseMonitor() {
+  return window['go']['main']['App']['TogglePauseMonitor']();
 }

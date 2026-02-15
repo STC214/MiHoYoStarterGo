@@ -23,7 +23,7 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 }
 
-// --- 環境與帳號邏輯 ---
+// --- 闀ㄦ澘顣ㄩ懜鍥ц祴閾忕喖鍊ф潛?---
 
 func (a *App) PrepareAccountEnvironment(acc logic.Account) string {
 	return app_logic.HandleEnvPatch(acc)
@@ -41,7 +41,7 @@ func (a *App) GetPlaintext(enc string) string {
 	return app_logic.GetPlaintext(enc)
 }
 
-// --- 設置 ---
+// --- 鐟奉厾鐤?---
 
 func (a *App) GetSettings() *logic.ConfigData {
 	return app_logic.GetSettings()
@@ -63,19 +63,24 @@ func (a *App) ExportBackup() string {
 	return app_logic.ExportBackup()
 }
 
-// --- 監控與執行 ---
+// --- 閻╋絾甯﹂懜鍥х吋鐞?---
 
 func (a *App) IsGameRunning(gameID string) bool {
-	return app_logic.CheckGameRunning(gameID)
+	return logic.IsGameRunning(gameID)
 }
 
 func (a *App) StartGame(gameID string) string {
-	return app_logic.StartGameProcess(gameID)
+	return app_logic.StartGame(gameID)
 }
 
 func (a *App) StartMonitor(acc logic.Account) {
-	// 调用 app_logic 中修复后的函数
-	app_logic.StartAutomationMonitor(a.ctx, acc.GameID, acc.Username, acc.Password, acc.IsFirstLogin, &a.IsPaused, &a.ShouldCancel)
+	a.IsPaused = false
+	a.ShouldCancel = false
+	app_logic.RunMonitor(a.ctx, acc, &a.IsPaused, &a.ShouldCancel)
+}
+
+func (a *App) ExecuteLoginAction(acc logic.Account, action string) string {
+	return app_logic.ExecuteLoginAction(a.ctx, acc, action, &a.IsPaused, &a.ShouldCancel)
 }
 
 func (a *App) StopMonitor() {
@@ -88,7 +93,7 @@ func (a *App) TogglePauseMonitor() {
 
 func (a *App) GetMonitorStatus() string {
 	if a.IsPaused {
-		return "已暫停"
+		return "PAUSED"
 	}
-	return "運行中"
+	return "RUNNING"
 }

@@ -1,10 +1,10 @@
-<script setup>
+﻿<script setup>
 import {reactive} from 'vue'
 import {Greet} from '../../wailsjs/go/main/App'
 
 const data = reactive({
   name: "",
-  resultText: "Please enter your name below 👇",
+  resultText: "Please enter your name below:",
 })
 
 function greet() {
@@ -69,3 +69,4 @@ function greet() {
   background-color: rgba(255, 255, 255, 1);
 }
 </style>
+

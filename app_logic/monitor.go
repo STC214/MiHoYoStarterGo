@@ -5,17 +5,17 @@ import (
 	"context"
 )
 
-// RunMonitor 負責具體的業務流：解密並啟動自動化監控流程
+// RunMonitor 负责具体的业务流：解密并启动自动化监控流程
 func RunMonitor(ctx context.Context, acc logic.Account, pause, cancel *bool) {
-	// 1. 從底層 logic 獲取解密後的明文密碼
+	// 1. 从底层 logic 获取解密後的明文密码
 	pwd, err := logic.DecryptString(acc.Password)
 	if err != nil {
-		// 如果解密失敗，可以在此處記錄日誌或通過 runtime 發送前端通知
+		// 如果解密失败，可以在此处记录日志或通过 runtime 发送前端通知
 		return
 	}
 
-	// 2. 呼叫底層 logic/automation.go 的核心監控函數
-	// 該函數應在內部使用 goroutine 運行，避免阻塞 Wails 主線程
+	// 2. 呼叫底层 logic/automation.go 的核心监控函数
+	// 该函数应在内部使用 goroutine 运行，避免阻塞 Wails 主线程
 	go logic.StartAutomationMonitor(
 		ctx,
 		acc.GameID,
@@ -27,21 +27,21 @@ func RunMonitor(ctx context.Context, acc logic.Account, pause, cancel *bool) {
 	)
 }
 
-// StartGame 啟動遊戲的業務封裝
+// StartGame 启动游戏的业务封装
 func StartGame(gameID string) string {
-	// 1. 加載配置獲取路徑
+	// 1. 加载配置获取路径
 	cfg, err := logic.LoadConfig()
 	if err != nil {
 		return "FAILED_LOAD_CONFIG"
 	}
 
-	// 2. 檢查對應遊戲的路徑是否存在
+	// 2. 检查对应游戏的路径是否存在
 	path, ok := cfg.GamePaths[gameID]
 	if !ok || path == "" {
 		return "PATH_NOT_FOUND"
 	}
 
-	// 3. 呼叫底層 logic/process.go 執行進程啟動
+	// 3. 呼叫底层 logic/process.go 执行进程启动
 	if err := logic.StartProcess(path); err != nil {
 		return "START_FAILED"
 	}

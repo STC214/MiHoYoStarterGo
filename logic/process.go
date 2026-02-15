@@ -5,14 +5,14 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
-	"syscall" // 確保導入，用於 Windows 隱藏窗口
+	"syscall" // 确保导入，用於 Windows 隐藏窗口
 
 	"github.com/shirou/gopsutil/v3/process"
 )
 
-// IsGameRunning 檢查遊戲進程是否存在
+// IsGameRunning 检查游戏进程是否存在
 func IsGameRunning(gameType string) bool {
-	// 映射遊戲名到進程名
+	// 映射游戏名到进程名
 	processMap := map[string]string{
 		"GenshinCN":  "YuanShen.exe",
 		"GenshinOS":  "GenshinImpact.exe",
@@ -38,7 +38,7 @@ func IsGameRunning(gameType string) bool {
 	return false
 }
 
-// KillGameProcess 殺死指定的遊戲進程 (核對原文件：已確認補回)
+// KillGameProcess 杀死指定的游戏进程 (核对原文件：已确认补回)
 func KillGameProcess(gameType string) error {
 	processMap := map[string]string{
 		"GenshinCN":  "YuanShen.exe",
@@ -49,7 +49,7 @@ func KillGameProcess(gameType string) error {
 
 	target, ok := processMap[gameType]
 	if !ok {
-		return fmt.Errorf("未知的遊戲類型: %s", gameType)
+		return fmt.Errorf("未知的游戏类型: %s", gameType)
 	}
 
 	pids, _ := process.Pids()
@@ -65,15 +65,15 @@ func KillGameProcess(gameType string) error {
 	return nil
 }
 
-// StartProcess 啟動外部可執行文件 (僅在此處植入隱藏黑框邏輯)
+// StartProcess 启动外部可执行文件 (仅在此处植入隐藏黑框逻辑)
 func StartProcess(path string) error {
 	var cmd *exec.Cmd
 
 	if runtime.GOOS == "windows" {
-		// 使用 cmd /C start 啟動，使遊戲進程脫離啟動器獨立運行
+		// 使用 cmd /C start 启动，使游戏进程脱离启动器独立运行
 		cmd = exec.Command("cmd", "/C", "start", "", path)
 
-		// --- 這是解決黑框的核心改動，除此之外不影響任何原邏輯 ---
+		// --- 这是解决黑框的核心改动，除此之外不影响任何原逻辑 ---
 		cmd.SysProcAttr = &syscall.SysProcAttr{
 			HideWindow:    true,
 			CreationFlags: 0x08000000, // CREATE_NO_WINDOW
@@ -84,10 +84,10 @@ func StartProcess(path string) error {
 
 	err := cmd.Start()
 	if err != nil {
-		return fmt.Errorf("無法啟動進程: %v", err)
+		return fmt.Errorf("无法启动进程: %v", err)
 	}
 
-	// 釋放資源，不阻塞 Wails 主程序
+	// 释放资源，不阻塞 Wails 主程序
 	go func() {
 		_ = cmd.Wait()
 	}()

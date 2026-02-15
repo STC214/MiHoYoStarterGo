@@ -5,7 +5,7 @@ def generate_tree(startpath, output_file):
     ignore_dirs = {'.git', '__pycache__', '.idea', '.vscode', 'vendor', 'obj', 'bin_temp'}
     
     with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(f"📁 Project Structure for: {os.path.abspath(startpath)}\n")
+        f.write(f"?? Project Structure for: {os.path.abspath(startpath)}\n")
         f.write("=" * 50 + "\n")
         
         for root, dirs, files in os.walk(startpath):
@@ -24,4 +24,4 @@ def generate_tree(startpath, output_file):
 if __name__ == "__main__":
     output = "project_structure.txt"
     generate_tree('.', output)
-    print(f"✅ 目录结构已生成到: {output}")
+    print(f"? 目录结构已生成到: {output}")

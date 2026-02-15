@@ -1,7 +1,7 @@
 package main
 
 import (
-	"context" // [修正] 補上遺漏的導入
+	"context" // [修正] 补上遗漏的导入
 	"embed"
 	"fmt"
 
@@ -17,13 +17,13 @@ import (
 var assets embed.FS
 
 func main() {
-	// 1. 預加載配置以獲取上次保存的窗口狀態
+	// 1. 预加载配置以获取上次保存的窗口状态
 	cfg, err := logic.LoadConfig()
 	if err != nil {
-		fmt.Println("加載配置失敗，將使用默認窗口大小:", err)
+		fmt.Println("加载配置失败，将使用默认窗口大小:", err)
 	}
 
-	// 設置默認值
+	// 设置默认值
 	if cfg.WindowWidth <= 0 {
 		cfg.WindowWidth = 1024
 	}
@@ -31,27 +31,27 @@ func main() {
 		cfg.WindowHeight = 768
 	}
 
-	// 創建你的 App 實例
+	// 创建你的 App 实例
 	app := NewApp()
 
 	err = wails.Run(&options.App{
-		Title:  "米哈遊啟動器增強版",
+		Title:  "米哈游启动器增强版",
 		Width:  cfg.WindowWidth,
 		Height: cfg.WindowHeight,
-		// [修正] X 和 Y 在 options.App 根層級是無效的，直接移除或放在 Windows 配置中
-		// 我們這裡移除它們，改為在啟動後通過 runtime 設置位置（或使用 Bind 方式）
-		// 如果你的 Wails 版本支持直接在 Windows 下設置，請參考官方文檔
+		// [修正] X 和 Y 在 options.App 根层级是无效的，直接移除或放在 Windows 配置中
+		// 我们这里移除它们，改为在启动後通过 runtime 设置位置（或使用 Bind 方式）
+		// 如果你的 Wails 版本支持直接在 Windows 下设置，请参考官方文档
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
 		BackgroundColour: &options.RGBA{R: 43, G: 43, B: 43, A: 1},
 		OnStartup:        app.startup,
-		// [修正] 補全 context.Context 類型定義
+		// [修正] 补全 context.Context 类型定义
 		OnBeforeClose: func(ctx context.Context) (prevent bool) {
 			x, y := runtime.WindowGetPosition(ctx)
 			w, h := runtime.WindowGetSize(ctx)
 
-			// 再次讀取配置以防運行期間有變動
+			// 再次读取配置以防运行期间有变动
 			currentCfg, err := logic.LoadConfig()
 			if err == nil {
 				currentCfg.WindowX = x
@@ -59,7 +59,7 @@ func main() {
 				currentCfg.WindowWidth = w
 				currentCfg.WindowHeight = h
 				_ = logic.SaveConfig(currentCfg)
-				fmt.Printf(">> [系統] 已記錄窗口狀態: %dx%d 坐標(%d,%d)\n", w, h, x, y)
+				fmt.Printf(">> [系统] 已记录窗口状态: %dx%d 坐标(%d,%d)\n", w, h, x, y)
 			}
 			return false
 		},

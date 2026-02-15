@@ -15,31 +15,32 @@ import (
 
 const configFileName = "config.json"
 
-// Account 賬號信息結構
+// Account 璐﹀彿淇℃伅缁撴瀯
 type Account struct {
-	ID           string `json:"id"`
-	Alias        string `json:"alias"`          // 賬號別名
-	Username     string `json:"username"`       // 賬號名
-	Password     string `json:"password"`       // 加密後的密碼
-	GameID       string `json:"game_id"`        // 遊戲類型 (GenshinCN, etc.)
-	Token        string `json:"token"`          // 加密後的註冊表 Token (Hex格式)
-	IsFirstLogin bool   `json:"is_first_login"` // 是否為首次登錄
-	CreateTime   int64  `json:"create_time"`    // 創建時間
+	ID                string `json:"id"`
+	Alias             string `json:"alias"`              // 璐﹀彿鍒悕
+	Username          string `json:"username"`           // 璐﹀彿鍚?
+	Password          string `json:"password"`           // 鍔犲瘑寰岀殑瀵嗙爜
+	GameID            string `json:"game_id"`            // 娓告垙绫诲瀷 (GenshinCN, etc.)
+	Token             string `json:"token"`              // 鍔犲瘑寰岀殑娉ㄥ唽琛?Token (Hex鏍煎紡)
+	DeviceFingerprint string `json:"device_fingerprint"` // saved hardware profile fingerprint
+	IsFirstLogin      bool   `json:"is_first_login"`     // 鏄惁涓洪娆＄櫥褰?
+	CreateTime        int64  `json:"create_time"`        // 鍒涘缓鏃堕棿
 }
 
-// ConfigData 整體配置文件結構
+// ConfigData 鏁翠綋閰嶇疆鏂囦欢缁撴瀯
 type ConfigData struct {
-	Theme        string            `json:"theme"`         // theme-darcula 或 theme-monokai
-	EnabledTags  []string          `json:"enabled_tags"`  // 啟用的標籤
-	Accounts     []Account         `json:"accounts"`      // 賬號列表
-	WindowWidth  int               `json:"window_width"`  // 窗口寬度
-	WindowHeight int               `json:"window_height"` // 窗口高度
-	WindowX      int               `json:"window_x"`      // 修复：补全 WindowX
-	WindowY      int               `json:"window_y"`      // 修复：补全 WindowY
-	GamePaths    map[string]string `json:"game_paths"`    // 遊戲路徑映射
+	Theme        string            `json:"theme"`         // theme-darcula 鎴?theme-monokai
+	EnabledTags  []string          `json:"enabled_tags"`  // 鍚敤鐨勬爣绛?
+	Accounts     []Account         `json:"accounts"`      // 璐﹀彿鍒楄〃
+	WindowWidth  int               `json:"window_width"`  // 绐楀彛瀹藉害
+	WindowHeight int               `json:"window_height"` // 绐楀彛楂樺害
+	WindowX      int               `json:"window_x"`      // 淇锛氳ˉ鍏?WindowX
+	WindowY      int               `json:"window_y"`      // 淇锛氳ˉ鍏?WindowY
+	GamePaths    map[string]string `json:"game_paths"`    // 娓告垙璺緞鏄犲皠
 }
 
-// --- 配置 IO 邏輯 ---
+// --- 閰嶇疆 IO 閫昏緫 ---
 
 func LoadConfig() (*ConfigData, error) {
 	var config ConfigData
@@ -87,7 +88,7 @@ func ExportPlaintextBackup(config *ConfigData) (string, error) {
 	return backupName, err
 }
 
-// ---------------- 密碼加密/解密 (AES) ----------------
+// ---------------- 瀵嗙爜鍔犲瘑/瑙ｅ瘑 (AES) ----------------
 
 var commonKey = []byte("MHY-STARTER-GOGO-12345678-SAFE-!") // 32 bytes for AES-256
 

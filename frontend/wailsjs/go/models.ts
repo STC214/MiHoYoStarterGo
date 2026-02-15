@@ -7,6 +7,7 @@ export namespace logic {
 	    password: string;
 	    game_id: string;
 	    token: string;
+	    device_fingerprint: string;
 	    is_first_login: boolean;
 	    create_time: number;
 	
@@ -22,6 +23,7 @@ export namespace logic {
 	        this.password = source["password"];
 	        this.game_id = source["game_id"];
 	        this.token = source["token"];
+	        this.device_fingerprint = source["device_fingerprint"];
 	        this.is_first_login = source["is_first_login"];
 	        this.create_time = source["create_time"];
 	    }

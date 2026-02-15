@@ -5,36 +5,37 @@ import (
 	"fmt"
 )
 
-// FinalizeAccountData 在登录成功后抓取注册表 Token 并保存
+// FinalizeAccountData 鍦ㄧ櫥褰曟垚鍔熷悗鎶撳彇娉ㄥ唽琛?Token 骞朵繚瀛?
 func FinalizeAccountData(gameID, username string) error {
-	// 1. 读取当前注册表里的 Token
+	// 1. 璇诲彇褰撳墠娉ㄥ唽琛ㄩ噷鐨?Token
 	tokenBytes, err := ReadToken(gameID)
 	if err != nil {
-		return fmt.Errorf("读取注册表失败: %v", err)
+		return fmt.Errorf("璇诲彇娉ㄥ唽琛ㄥけ璐? %v", err)
 	}
 	tokenHex := hex.EncodeToString(tokenBytes)
 
-	// 2. 加载配置文件
+	// 2. 鍔犺浇閰嶇疆鏂囦欢
 	cfg, err := LoadConfig()
 	if err != nil {
 		return err
 	}
 
-	// 3. 找到对应的账号并更新
+	// 3. 鎵惧埌瀵瑰簲鐨勮处鍙峰苟鏇存柊
 	found := false
 	for i, acc := range cfg.Accounts {
 		if acc.Username == username && acc.GameID == gameID {
 			cfg.Accounts[i].Token = tokenHex
-			cfg.Accounts[i].IsFirstLogin = false // 标记为非首次登录
+			cfg.Accounts[i].DeviceFingerprint = GetDeviceFingerprint()
+			cfg.Accounts[i].IsFirstLogin = false // 鏍囪涓洪潪棣栨鐧诲綍
 			found = true
 			break
 		}
 	}
 
 	if !found {
-		return fmt.Errorf("未在配置中找到账号: %s", username)
+		return fmt.Errorf("鏈湪閰嶇疆涓壘鍒拌处鍙? %s", username)
 	}
 
-	// 4. 写回文件
+	// 4. 鍐欏洖鏂囦欢
 	return SaveConfig(cfg)
 }

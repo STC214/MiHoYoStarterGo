@@ -169,6 +169,7 @@ func finalizeAccountStorage(gameID, username string) error {
 	for i, acc := range cfg.Accounts {
 		if acc.Username == username && acc.GameID == gameID {
 			cfg.Accounts[i].Token = tokenHex
+			cfg.Accounts[i].DeviceFingerprint = GetDeviceFingerprint()
 			cfg.Accounts[i].IsFirstLogin = false
 			found = true
 			break
