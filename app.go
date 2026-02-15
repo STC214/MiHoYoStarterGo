@@ -13,14 +13,18 @@ type App struct {
 }
 
 func NewApp() *App {
-	return &App{IsPaused: false, ShouldCancel: false}
+	return &App{
+		IsPaused:     false,
+		ShouldCancel: false,
+	}
 }
 
-func (a *App) startup(ctx context.Context) { a.ctx = ctx }
+func (a *App) startup(ctx context.Context) {
+	a.ctx = ctx
+}
 
-// --- 环境与账号逻辑转发 ---
+// --- 環境與帳號邏輯 ---
 
-// PrepareAccountEnvironment 环境准备补丁 (满足条件：游戏未运行 && 非首次登录)
 func (a *App) PrepareAccountEnvironment(acc logic.Account) string {
 	return app_logic.HandleEnvPatch(acc)
 }
@@ -37,7 +41,7 @@ func (a *App) GetPlaintext(enc string) string {
 	return app_logic.GetPlaintext(enc)
 }
 
-// --- 配置与设置转发 ---
+// --- 設置 ---
 
 func (a *App) GetSettings() *logic.ConfigData {
 	return app_logic.GetSettings()
@@ -59,29 +63,32 @@ func (a *App) ExportBackup() string {
 	return app_logic.ExportBackup()
 }
 
-// --- 监控与执行转发 ---
+// --- 監控與執行 ---
 
 func (a *App) IsGameRunning(gameID string) bool {
-	return logic.IsGameRunning(gameID)
+	return app_logic.CheckGameRunning(gameID)
 }
 
-func (a *App) StartGameExecution(gameID string) string {
-	return app_logic.StartGame(gameID)
+func (a *App) StartGame(gameID string) string {
+	return app_logic.StartGameProcess(gameID)
 }
 
-func (a *App) ForceStartMonitor(acc logic.Account) string {
-	a.IsPaused, a.ShouldCancel = false, false
-	// 启动异步监控流
-	go app_logic.RunMonitor(a.ctx, acc, &a.IsPaused, &a.ShouldCancel)
-	return "SUCCESS"
+func (a *App) StartMonitor(acc logic.Account) {
+	// 调用 app_logic 中修复后的函数
+	app_logic.StartAutomationMonitor(a.ctx, acc.GameID, acc.Username, acc.Password, acc.IsFirstLogin, &a.IsPaused, &a.ShouldCancel)
 }
 
-func (a *App) TogglePause() string {
-	a.IsPaused = !a.IsPaused
-	return "OK"
-}
-
-func (a *App) StopMonitor() string {
+func (a *App) StopMonitor() {
 	a.ShouldCancel = true
-	return "SUCCESS"
+}
+
+func (a *App) TogglePauseMonitor() {
+	a.IsPaused = !a.IsPaused
+}
+
+func (a *App) GetMonitorStatus() string {
+	if a.IsPaused {
+		return "已暫停"
+	}
+	return "運行中"
 }

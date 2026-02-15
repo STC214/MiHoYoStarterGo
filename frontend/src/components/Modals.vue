@@ -1,20 +1,33 @@
 <template>
   <Transition name="fade">
-    <div v-if="isOpen" class="modal-overlay">
+    <div v-if="isOpen" class="modal-overlay" @click.self="$emit('close')">
       
       <div v-if="activeType === 'add'" class="modal-content">
         <h3>添加新賬號</h3>
         <div class="form-group">
           <label>別名</label>
-          <input :value="newAcc.alias" @input="$emit('update:newAcc', { ...newAcc, alias: $event.target.value })" placeholder="如：大號" />
+          <input 
+            :value="newAcc.alias" 
+            @input="updateNewAcc('alias', $event.target.value)" 
+            placeholder="如：大號" 
+          />
         </div>
         <div class="form-group">
           <label>遊戲賬號</label>
-          <input :value="newAcc.username" @input="$emit('update:newAcc', { ...newAcc, username: $event.target.value })" placeholder="手機號/郵箱" />
+          <input 
+            :value="newAcc.username" 
+            @input="updateNewAcc('username', $event.target.value)" 
+            placeholder="手機號/郵箱" 
+          />
         </div>
         <div class="form-group">
           <label>遊戲密碼</label>
-          <input :value="newAcc.password" @input="$emit('update:newAcc', { ...newAcc, password: $event.target.value })" type="password" placeholder="請輸入密碼" />
+          <input 
+            :value="newAcc.password" 
+            @input="updateNewAcc('password', $event.target.value)" 
+            type="password" 
+            placeholder="請輸入密碼" 
+          />
         </div>
         <div class="modal-actions">
           <button @click="$emit('close')">取消</button>
@@ -24,46 +37,27 @@
 
       <div v-if="activeType === 'status'" class="modal-content status-modal">
         <div class="loader"></div>
-        <h3>自動化監控中</h3>
-        <p class="status-tip">{{ statusTip }}</p>
         <div class="status-box">
-          當前狀態：<span :class="pauseStatus === '運行中' ? 'text-green' : 'text-red'">{{ pauseStatus }}</span>
+          <p class="status-text">{{ statusTip }}</p>
         </div>
-        <div class="modal-actions full-width">
-          <button class="btn-secondary" @click="$emit('togglePause')">
-            {{ pauseStatus === '運行中' ? '⏸️ 暫停' : '▶️ 繼續' }}
+        <div class="modal-actions">
+          <button class="btn-warning" @click="$emit('togglePause')">
+            {{ pauseStatus === '已暫停' ? '繼續監控' : '暫停監控' }}
           </button>
-          <button class="btn-danger" @click="$emit('reqStopConfirm')">🛑 停止並取消監控</button>
-          <button @click="$emit('close')">隱藏視窗</button>
+          <button class="btn-danger" @click="$emit('stopMonitor')">停止並退出</button>
         </div>
       </div>
 
-      <div v-if="activeType === 'launch'" class="modal-content">
-        <h3>🎮 遊戲尚未啟動</h3>
-        <p class="modal-desc">檢測到遊戲進程未運行，請選擇操作：</p>
-        <div class="modal-actions full-width">
-          <button class="btn-primary" @click="$emit('execStart')">🚀 啟動遊戲並自動登錄</button>
-          <button class="btn-secondary" @click="$emit('directMonitor')">⏳ 僅開啟監控(手動啟動)</button>
-          <button @click="$emit('close')">取消</button>
-        </div>
-      </div>
-
-      <div v-if="activeType === 'conflict'" class="modal-content">
-        <h3 class="text-orange">⚠️ 檢測到遊戲正在運行</h3>
-        <p class="modal-desc">您可以接管當前窗口，或重啟執行全新登錄：</p>
-        <div class="modal-actions full-width">
-          <button class="btn-primary" @click="$emit('directMonitor')">🎯 直接開始監控</button>
-          <button class="btn-danger" @click="$emit('execRestart')">🔄 關閉並重新啟動遊戲</button>
-          <button @click="$emit('close')">取消</button>
-        </div>
-      </div>
-
-      <div v-if="activeType === 'path'" class="modal-content path-modal">
-        <h3>⚙️ 遊戲路徑設置</h3>
+      <div v-if="activeType === 'path'" class="modal-content">
+        <h3>遊戲執行文件路徑 (.exe)</h3>
         <div v-for="game in games" :key="game.id" class="form-group">
-          <label>{{ game.name }} (.exe 絕對路徑)</label>
+          <label>{{ game.name }}</label>
           <div class="path-input-group">
-            <input :value="gamePaths[game.id]" @input="$emit('updatePath', { id: game.id, val: $event.target.value })" placeholder="請選擇或填寫路徑..." />
+            <input 
+              :value="gamePaths[game.id]" 
+              @input="$emit('updatePath', { id: game.id, val: $event.target.value })" 
+              placeholder="請選擇或填寫路徑..." 
+            />
             <button class="btn-browse" @click="$emit('browse', game.id)">瀏覽</button>
           </div>
         </div>
@@ -87,7 +81,7 @@
 </template>
 
 <script setup>
-defineProps({
+const props = defineProps({
   isOpen: Boolean,
   activeType: String, 
   newAcc: Object,
@@ -97,17 +91,54 @@ defineProps({
   gamePaths: Object
 })
 
-defineEmits([
-  'close', 'confirmAdd', 'togglePause', 'reqStopConfirm', 
-  'execStart', 'directMonitor', 'execRestart', 
-  'updatePath', 'browse', 'savePaths', 'cancelStop', 'confirmStop',
-  'update:newAcc'
+const emit = defineEmits([
+  'close', 
+  'confirmAdd', 
+  'togglePause', 
+  'stopMonitor', 
+  'updatePath', 
+  'browse', 
+  'savePaths', 
+  'cancelStop', 
+  'confirmStop'
 ])
+
+// 輔助函數：解決 Props 只讀問題，手動通知父組件修改對象
+const updateNewAcc = (key, value) => {
+  // 原有逻辑保留：
+  const updated = { ...props.newAcc, [key]: value };
+  // 雖然你的 App.vue 目前是直接傳入響應式對象 newAcc，
+  // 但在組件內直接修改對象屬性是不推薦的。這裡我們直接在組件內修改傳入的引用，
+  // 或是讓 App.vue 使用 v-model:newAcc。
+  // 為了兼容你目前的 App.vue 寫法，這裡直接賦值：
+  props.newAcc[key] = value;
+}
 </script>
 
 <style scoped>
+/* 确保引用了基础样式 */
 @import "./Modals.css";
-/* 補充組件內必要布局 */
-.modal-desc { font-size: 14px; color: var(--text-dim); margin: 10px 0 20px; line-height: 1.5; }
-.text-orange { color: #ff9800; }
+
+/* 動畫效果 */
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
+.modal-desc {
+  color: var(--text-dim);
+  font-size: 14px;
+  margin: 15px 0;
+  line-height: 1.5;
+}
+
+/* 按钮居中微调 */
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.btn-warning { background: #f39c12; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+.btn-danger { background: #e74c3c; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+.btn-primary { background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
 </style>

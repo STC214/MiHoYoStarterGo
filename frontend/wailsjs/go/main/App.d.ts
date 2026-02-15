@@ -8,8 +8,6 @@ export function DeleteAccount(arg1:string):Promise<string>;
 
 export function ExportBackup():Promise<string>;
 
-export function ForceStartMonitor(arg1:logic.Account):Promise<string>;
-
 export function GetPlaintext(arg1:string):Promise<string>;
 
 export function GetSettings():Promise<logic.ConfigData>;
@@ -18,14 +16,16 @@ export function IsGameRunning(arg1:string):Promise<boolean>;
 
 export function PrepareAccountEnvironment(arg1:logic.Account):Promise<string>;
 
+export function RunMonitor(arg1:logic.Account):Promise<void>;
+
 export function SaveGamePaths(arg1:Record<string, string>):Promise<void>;
 
 export function SaveTheme(arg1:string):Promise<void>;
 
 export function SelectGameFile():Promise<string>;
 
-export function StartGameExecution(arg1:string):Promise<string>;
+export function StartGame(arg1:string):Promise<string>;
 
-export function StopMonitor():Promise<string>;
+export function StopMonitor():Promise<void>;
 
-export function TogglePause():Promise<string>;
+export function TogglePause():Promise<void>;

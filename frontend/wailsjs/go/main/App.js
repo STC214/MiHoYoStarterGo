@@ -14,10 +14,6 @@ export function ExportBackup() {
   return window['go']['main']['App']['ExportBackup']();
 }
 
-export function ForceStartMonitor(arg1) {
-  return window['go']['main']['App']['ForceStartMonitor'](arg1);
-}
-
 export function GetPlaintext(arg1) {
   return window['go']['main']['App']['GetPlaintext'](arg1);
 }
@@ -34,6 +30,10 @@ export function PrepareAccountEnvironment(arg1) {
   return window['go']['main']['App']['PrepareAccountEnvironment'](arg1);
 }
 
+export function RunMonitor(arg1) {
+  return window['go']['main']['App']['RunMonitor'](arg1);
+}
+
 export function SaveGamePaths(arg1) {
   return window['go']['main']['App']['SaveGamePaths'](arg1);
 }
@@ -46,8 +46,8 @@ export function SelectGameFile() {
   return window['go']['main']['App']['SelectGameFile']();
 }
 
-export function StartGameExecution(arg1) {
-  return window['go']['main']['App']['StartGameExecution'](arg1);
+export function StartGame(arg1) {
+  return window['go']['main']['App']['StartGame'](arg1);
 }
 
 export function StopMonitor() {
