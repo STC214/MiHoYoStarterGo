@@ -34,6 +34,7 @@ export namespace logic {
 	    window_height: number;
 	    window_x: number;
 	    window_y: number;
+	    game_paths: Record<string, string>;
 	
 	    static createFrom(source: any = {}) {
 	        return new ConfigData(source);
@@ -48,6 +49,7 @@ export namespace logic {
 	        this.window_height = source["window_height"];
 	        this.window_x = source["window_x"];
 	        this.window_y = source["window_y"];
+	        this.game_paths = source["game_paths"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

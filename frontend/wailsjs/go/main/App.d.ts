@@ -14,9 +14,17 @@ export function GetPlaintext(arg1:string):Promise<string>;
 
 export function GetSettings():Promise<logic.ConfigData>;
 
-export function RequestSwitch(arg1:logic.Account):Promise<string>;
+export function IsGameRunning(arg1:string):Promise<boolean>;
 
-export function SaveTheme(arg1:string):Promise<string>;
+export function PrepareAccountEnvironment(arg1:logic.Account):Promise<string>;
+
+export function SaveGamePaths(arg1:Record<string, string>):Promise<void>;
+
+export function SaveTheme(arg1:string):Promise<void>;
+
+export function SelectGameFile():Promise<string>;
+
+export function StartGameExecution(arg1:string):Promise<string>;
 
 export function StopMonitor():Promise<string>;
 

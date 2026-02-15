@@ -12,38 +12,39 @@ import (
 	"os"
 )
 
-// Account 账号信息结构
+// Account 賬號信息結構
 type Account struct {
 	ID           string `json:"id"`
-	Alias        string `json:"alias"`          // 账号别名
-	Username     string `json:"username"`       // 账号名
-	Password     string `json:"password"`       // 加密后的密码
-	GameID       string `json:"game_id"`        // 游戏类型 (GenshinCN, etc.)
-	Token        string `json:"token"`          // 加密后的注册表 Token (Hex格式)
-	IsFirstLogin bool   `json:"is_first_login"` // 是否为首次登录
-	CreateTime   int64  `json:"create_time"`
+	Alias        string `json:"alias"`          // 賬號別名
+	Username     string `json:"username"`       // 賬號名
+	Password     string `json:"password"`       // 加密後的密碼
+	GameID       string `json:"game_id"`        // 遊戲類型 (GenshinCN, etc.)
+	Token        string `json:"token"`          // 加密後的註冊表 Token (Hex格式)
+	IsFirstLogin bool   `json:"is_first_login"` // 是否為首次登錄
+	CreateTime   int64  `json:"create_time"`    // 創建時間
 }
 
-// ConfigData 整体配置文件结构 [新增窗口状态字段]
+// ConfigData 整體配置文件結構 [新增 GamePaths 字段]
 type ConfigData struct {
-	Theme        string    `json:"theme"` // theme-darcula 或 theme-monokai
-	EnabledTags  []string  `json:"enabled_tags"`
-	Accounts     []Account `json:"accounts"`
-	WindowWidth  int       `json:"window_width"`  // 窗口宽度
-	WindowHeight int       `json:"window_height"` // 窗口高度
-	WindowX      int       `json:"window_x"`      // 窗口 X 坐标
-	WindowY      int       `json:"window_y"`      // 窗口 Y 坐标
+	Theme        string            `json:"theme"`         // theme-darcula 或 theme-monokai
+	EnabledTags  []string          `json:"enabled_tags"`  // 啟用的標籤
+	Accounts     []Account         `json:"accounts"`      // 賬號列表
+	WindowWidth  int               `json:"window_width"`  // 窗口寬度
+	WindowHeight int               `json:"window_height"` // 窗口高度
+	WindowX      int               `json:"window_x"`      // 窗口 X 坐標
+	WindowY      int               `json:"window_y"`      // 窗口 Y 坐標
+	GamePaths    map[string]string `json:"game_paths"`    // [新增] 存儲各遊戲 .exe 絕對路徑
 }
 
-const configFileName = "config.json"
+const configFileName = "config.json" //
 
-// --- 加密核心逻辑 ---
+// --- 加密核心邏輯 ---
 
-// getSecretKey 根据设备指纹生成 32 字节的 AES 密钥
+// getSecretKey 根據設備指紋生成 32 字節的 AES 密鑰
 func getSecretKey() []byte {
-	fingerprint := GetDeviceFingerprint()
-	hash := md5.Sum([]byte(fingerprint + "_mhy_secret")) // 加盐处理
-	return []byte(hex.EncodeToString(hash[:]))           // 返回 32 字节 Key
+	fingerprint := GetDeviceFingerprint()                // 獲取設備指紋
+	hash := md5.Sum([]byte(fingerprint + "_mhy_secret")) // 加鹽處理
+	return []byte(hex.EncodeToString(hash[:]))           // 返回 32 字節 Key
 }
 
 // EncryptString 加密字符串
@@ -59,7 +60,7 @@ func EncryptString(plaintext string) (string, error) {
 	nonce := make([]byte, gcm.NonceSize())
 	io.ReadFull(rand.Reader, nonce)
 	ciphertext := gcm.Seal(nonce, nonce, []byte(plaintext), nil)
-	return hex.EncodeToString(ciphertext), nil
+	return hex.EncodeToString(ciphertext), nil //
 }
 
 // DecryptString 解密字符串
@@ -82,28 +83,35 @@ func DecryptString(ciphertextHex string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(plaintext), nil
+	return string(plaintext), nil //
 }
 
-// --- 文件操作逻辑 ---
+// --- 文件操作邏輯 ---
 
-// LoadConfig 从本地加载配置
+// LoadConfig 從本地加載配置
 func LoadConfig() (*ConfigData, error) {
 	var config ConfigData
 	file, err := os.ReadFile(configFileName)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// 默认初始化配置，给定默认窗口大小
+			// 默認初始化配置，給定默認窗口大小
 			return &ConfigData{
 				Theme:        "theme-darcula",
 				EnabledTags:  []string{"GenshinCN"},
 				WindowWidth:  1024,
 				WindowHeight: 768,
+				GamePaths:    make(map[string]string), // 初始化路徑地圖
 			}, nil
 		}
 		return nil, err
 	}
 	err = json.Unmarshal(file, &config)
+
+	// 確保 GamePaths 不為 nil，防止前端調用報錯
+	if config.GamePaths == nil {
+		config.GamePaths = make(map[string]string)
+	}
+
 	return &config, err
 }
 
@@ -113,10 +121,10 @@ func SaveConfig(config *ConfigData) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(configFileName, data, 0644)
+	return os.WriteFile(configFileName, data, 0644) //
 }
 
-// ExportPlaintextBackup 明文导出备份 (需求：方便迁移)
+// ExportPlaintextBackup 明文導出備份 (需求：方便遷移)
 func ExportPlaintextBackup(config *ConfigData) (string, error) {
 	type PlainAccount struct {
 		Alias    string `json:"alias"`
@@ -137,5 +145,5 @@ func ExportPlaintextBackup(config *ConfigData) (string, error) {
 	data, _ := json.MarshalIndent(backup, "", "  ")
 	backupFile := "backup_accounts.json"
 	err := os.WriteFile(backupFile, data, 0644)
-	return backupFile, err
+	return backupFile, err //
 }

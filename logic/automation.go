@@ -35,7 +35,7 @@ func StartAutomationMonitor(ctx context.Context, gameID, user, pwd string, isFir
 			windowName = "绝区零"
 		}
 
-		ticker := time.NewTicker(1200 * time.Millisecond)
+		ticker := time.NewTicker(300 * time.Millisecond)
 		defer func() {
 			ticker.Stop()
 			os.Remove(tmpImgPath) // 协程结束时清理临时图片资源

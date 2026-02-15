@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall" // 新增导入
 )
 
 type OCRRawResponse struct {
@@ -21,7 +22,7 @@ type TextPoint struct {
 	X      int
 	Y      int
 	LeftX  int
-	RightX int // 新增：右边界坐标
+	RightX int
 	Width  int
 	Height int
 }
@@ -34,9 +35,18 @@ func RecognizeWithPos(imagePath string) ([]TextPoint, error) {
 	cmd := exec.Command(absExe, "--image_path="+absImg)
 	cmd.Dir = filepath.Dir(absExe)
 
-	output, _ := cmd.CombinedOutput()
-	outputStr := string(output)
+	// --- 核心修复：隐藏窗口属性 ---
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		HideWindow:    true,
+		CreationFlags: 0x08000000, // CREATE_NO_WINDOW
+	}
 
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("OCR 执行失败: %v", err)
+	}
+
+	outputStr := string(output)
 	jsonStart := strings.Index(outputStr, "{")
 	if jsonStart == -1 {
 		return nil, fmt.Errorf("OCR 无效输出")
@@ -47,19 +57,17 @@ func RecognizeWithPos(imagePath string) ([]TextPoint, error) {
 		return nil, err
 	}
 
-	var results []TextPoint
-	for _, item := range raw.Data {
-		if len(item.Box) == 4 {
-			results = append(results, TextPoint{
-				Text:   item.Text,
-				X:      (item.Box[0][0] + item.Box[2][0]) / 2,
-				Y:      (item.Box[0][1] + item.Box[2][1]) / 2,
-				LeftX:  item.Box[0][0],
-				RightX: item.Box[1][0],
-				Width:  item.Box[2][0] - item.Box[0][0],
-				Height: item.Box[2][1] - item.Box[0][1],
-			})
-		}
+	var res []TextPoint
+	for _, d := range raw.Data {
+		res = append(res, TextPoint{
+			Text:   d.Text,
+			X:      (d.Box[0][0] + d.Box[1][0]) / 2,
+			Y:      (d.Box[0][1] + d.Box[2][1]) / 2,
+			LeftX:  d.Box[0][0],
+			RightX: d.Box[1][0],
+			Width:  d.Box[1][0] - d.Box[0][0],
+			Height: d.Box[2][1] - d.Box[0][1],
+		})
 	}
-	return results, nil
+	return res, nil
 }

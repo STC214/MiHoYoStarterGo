@@ -26,12 +26,28 @@ export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
 }
 
-export function RequestSwitch(arg1) {
-  return window['go']['main']['App']['RequestSwitch'](arg1);
+export function IsGameRunning(arg1) {
+  return window['go']['main']['App']['IsGameRunning'](arg1);
+}
+
+export function PrepareAccountEnvironment(arg1) {
+  return window['go']['main']['App']['PrepareAccountEnvironment'](arg1);
+}
+
+export function SaveGamePaths(arg1) {
+  return window['go']['main']['App']['SaveGamePaths'](arg1);
 }
 
 export function SaveTheme(arg1) {
   return window['go']['main']['App']['SaveTheme'](arg1);
+}
+
+export function SelectGameFile() {
+  return window['go']['main']['App']['SelectGameFile']();
+}
+
+export function StartGameExecution(arg1) {
+  return window['go']['main']['App']['StartGameExecution'](arg1);
 }
 
 export function StopMonitor() {
