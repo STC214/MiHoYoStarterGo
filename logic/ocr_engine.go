@@ -3,6 +3,7 @@ package logic
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,42 @@ type TextPoint struct {
 	RightX int
 	Width  int
 	Height int
+}
+
+func parseOCRBox(box [][]int) (left, right, top, bottom int, ok bool) {
+	if len(box) == 0 {
+		return 0, 0, 0, 0, false
+	}
+
+	left = math.MaxInt
+	right = math.MinInt
+	top = math.MaxInt
+	bottom = math.MinInt
+
+	for _, pt := range box {
+		if len(pt) < 2 {
+			return 0, 0, 0, 0, false
+		}
+		x, y := pt[0], pt[1]
+		if x < left {
+			left = x
+		}
+		if x > right {
+			right = x
+		}
+		if y < top {
+			top = y
+		}
+		if y > bottom {
+			bottom = y
+		}
+	}
+
+	if right <= left || bottom <= top {
+		return 0, 0, 0, 0, false
+	}
+
+	return left, right, top, bottom, true
 }
 
 func RecognizeWithPos(imagePath string) ([]TextPoint, error) {
@@ -58,16 +95,35 @@ func RecognizeWithPos(imagePath string) ([]TextPoint, error) {
 	}
 
 	var res []TextPoint
+	invalidCount := 0
 	for _, d := range raw.Data {
+		left, right, top, bottom, ok := parseOCRBox(d.Box)
+		if !ok {
+			invalidCount++
+			continue
+		}
+
 		res = append(res, TextPoint{
-			Text:   d.Text,
-			X:      (d.Box[0][0] + d.Box[1][0]) / 2,
-			Y:      (d.Box[0][1] + d.Box[2][1]) / 2,
-			LeftX:  d.Box[0][0],
-			RightX: d.Box[1][0],
-			Width:  d.Box[1][0] - d.Box[0][0],
-			Height: d.Box[2][1] - d.Box[0][1],
+			Text:   strings.TrimSpace(d.Text),
+			X:      (left + right) / 2,
+			Y:      (top + bottom) / 2,
+			LeftX:  left,
+			RightX: right,
+			Width:  right - left,
+			Height: bottom - top,
 		})
 	}
+
+	if len(res) == 0 {
+		if invalidCount > 0 {
+			return nil, fmt.Errorf("OCR 结果结构异常：%d 条数据坐标无效", invalidCount)
+		}
+		return nil, fmt.Errorf("OCR 未识别到有效文本")
+	}
+
+	if invalidCount > 0 {
+		fmt.Printf("[OCR] 跳过 %d 条无效坐标数据\n", invalidCount)
+	}
+
 	return res, nil
 }
