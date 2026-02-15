@@ -6,6 +6,10 @@ export function AddAccount(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['AddAccount'](arg1, arg2, arg3, arg4);
 }
 
+export function CaptureDebugWindow(arg1) {
+  return window['go']['main']['App']['CaptureDebugWindow'](arg1);
+}
+
 export function DeleteAccount(arg1) {
   return window['go']['main']['App']['DeleteAccount'](arg1);
 }

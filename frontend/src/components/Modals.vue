@@ -56,11 +56,12 @@
         <div class="status-box">
           <p class="status-text">{{ statusTip }}</p>
         </div>
-        <div class="modal-actions">
-          <button class="btn-warning" @click="$emit('togglePause')">
+        <div class="modal-actions status-actions">
+          <button class="btn-primary btn-wide" @click="$emit('captureDebug')">保存调试截图</button>
+          <button class="btn-warning btn-wide" @click="$emit('togglePause')">
             {{ pauseStatus === 'PAUSED' ? '继续监控' : '暂停监控' }}
           </button>
-          <button class="btn-danger" @click="$emit('stopMonitor')">停止并退出</button>
+          <button class="btn-danger btn-wide" @click="$emit('stopMonitor')">停止并退出</button>
         </div>
       </div>
 
@@ -83,6 +84,23 @@
         </div>
       </div>
 
+      <div v-if="activeType === 'message'" class="modal-content">
+        <h3>提示</h3>
+        <p class="modal-desc">{{ messageText }}</p>
+        <div class="modal-actions">
+          <button class="btn-primary" @click="$emit('close')">确定</button>
+        </div>
+      </div>
+
+      <div v-if="activeType === 'deleteConfirm'" class="modal-content">
+        <h3>确认删除？</h3>
+        <p class="modal-desc">{{ messageText }}</p>
+        <div class="modal-actions">
+          <button @click="$emit('close')">取消</button>
+          <button class="btn-danger" @click="$emit('confirmDelete')">确认删除</button>
+        </div>
+      </div>
+
       <div v-if="activeType === 'stopConfirm'" class="modal-content">
         <h3>确认停止？</h3>
         <p class="modal-desc">确定要停止监控吗？这将释放 OCR 资源并停止自动化流程。</p>
@@ -101,6 +119,7 @@ const props = defineProps({
   activeType: String,
   newAcc: Object,
   statusTip: String,
+  messageText: String,
   pauseStatus: String,
   runContext: Object,
   games: Array,
@@ -111,13 +130,15 @@ defineEmits([
   'close',
   'confirmAdd',
   'runAction',
+  'captureDebug',
   'togglePause',
   'stopMonitor',
   'updatePath',
   'browse',
   'savePaths',
   'cancelStop',
-  'confirmStop'
+  'confirmStop',
+  'confirmDelete'
 ])
 
 const updateNewAcc = (key, value) => {
@@ -151,6 +172,20 @@ const updateNewAcc = (key, value) => {
   gap: 10px;
   margin-top: 20px;
   flex-wrap: wrap;
+}
+
+.status-actions {
+  width: 100%;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.btn-wide {
+  width: 100%;
+  text-align: center;
+  padding: 10px 16px;
+  font-weight: 600;
 }
 
 .btn-warning {

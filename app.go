@@ -4,6 +4,8 @@ import (
 	"MiHoYoStarterGo/app_logic"
 	"MiHoYoStarterGo/logic"
 	"context"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type App struct {
@@ -21,6 +23,35 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+
+	// Width policy:
+	// - max width: 620
+	// - min width: 2/3 of 620
+	const maxWindowWidth = 620
+	const minWindowWidth = (maxWindowWidth * 2) / 3
+	const minWindowHeight = 620
+	runtime.WindowSetMinSize(ctx, minWindowWidth, minWindowHeight)
+
+	// Cap maximum size to configured max width and current primary screen size.
+	if screens, err := runtime.ScreenGetAll(ctx); err == nil {
+		for _, s := range screens {
+			if s.IsPrimary {
+				width := maxWindowWidth
+				if s.Size.Width < width {
+					width = s.Size.Width
+				}
+				runtime.WindowSetMaxSize(ctx, width, s.Size.Height)
+				return
+			}
+		}
+		if len(screens) > 0 {
+			width := maxWindowWidth
+			if screens[0].Size.Width < width {
+				width = screens[0].Size.Width
+			}
+			runtime.WindowSetMaxSize(ctx, width, screens[0].Size.Height)
+		}
+	}
 }
 
 // --- 闀ㄦ澘顣ㄩ懜鍥ц祴閾忕喖鍊ф潛?---
@@ -61,6 +92,10 @@ func (a *App) SelectGameFile() string {
 
 func (a *App) ExportBackup() string {
 	return app_logic.ExportBackup()
+}
+
+func (a *App) CaptureDebugWindow(gameID string) string {
+	return app_logic.CaptureDebugWindow(gameID)
 }
 
 // --- 閻╋絾甯﹂懜鍥х吋鐞?---

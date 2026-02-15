@@ -1,10 +1,11 @@
 ﻿<template>
   <div :class="['container', settings.theme]">
     <MenuBar
-      :showStatus="showStatusModal"
+      :monitorActive="monitorActive"
       :pauseStatus="pauseStatus"
       @toggleTheme="toggleTheme"
       @handleExport="handleExport"
+      @openStatus="openStatusModal"
       @openPath="modalType = 'path'"
       @openAdd="openAddModal"
     />
@@ -40,6 +41,7 @@
       :activeType="modalType"
       :newAcc="newAcc"
       :statusTip="statusTip"
+      :messageText="messageText"
       :pauseStatus="pauseStatus"
       :runContext="runContext"
       :games="games"
@@ -47,6 +49,7 @@
       @close="closeModal"
       @confirmAdd="handleAdd"
       @runAction="handleRunAction"
+      @captureDebug="handleCaptureDebug"
       @togglePause="togglePause"
       @stopMonitor="handleStopMonitor"
       @updatePath="updatePathValue"
@@ -54,6 +57,7 @@
       @savePaths="handleSavePaths"
       @cancelStop="modalType = 'status'"
       @confirmStop="confirmStopMonitor"
+      @confirmDelete="confirmDelete"
     />
   </div>
 </template>
@@ -73,6 +77,7 @@ import {
   DeleteAccount,
   GetPlaintext,
   ExportBackup,
+  CaptureDebugWindow,
   ExecuteLoginAction,
   IsGameRunning,
   StopMonitor,
@@ -90,9 +95,11 @@ const games = [
 const activeTab = ref('GenshinCN')
 const modalType = ref('')
 const statusTip = ref('正在启动...')
+const messageText = ref('')
 const pauseStatus = ref('RUNNING')
-const showStatusModal = ref(false)
+const monitorActive = ref(false)
 const selectedAccount = ref(null)
+const pendingDeleteAccount = ref(null)
 const runContext = reactive({
   isRunning: false,
   alias: ''
@@ -121,7 +128,7 @@ onMounted(async () => {
   })
 
   EventsOn('monitor_finished', () => {
-    showStatusModal.value = false
+    monitorActive.value = false
     modalType.value = ''
     pauseStatus.value = 'RUNNING'
     loadAll()
@@ -160,7 +167,7 @@ const handleAdd = async () => {
     modalType.value = ''
     await loadAll()
   } else {
-    alert('保存失败: ' + res)
+    showMessage('保存失败: ' + res)
   }
 }
 
@@ -183,28 +190,28 @@ const handleRunAction = async action => {
     return
   }
   if (res === 'START_FAILED') {
-    alert('启动游戏失败，请检查路径和权限')
+    showMessage('启动游戏失败，请检查路径和权限')
     return
   }
   if (res === 'GAME_NOT_RUNNING') {
-    alert('目标游戏进程当前未运行，请改用“换号并启动游戏”或“手动启动游戏”')
+    showMessage('目标游戏进程当前未运行，请改用“换号并启动游戏”或“手动启动游戏”')
     return
   }
   if (res === 'GAME_RUNNING') {
-    alert('目标游戏进程已在运行，请改用“切换账号并自动重启”或“手动切换到登录界面”')
+    showMessage('目标游戏进程已在运行，请改用“切换账号并自动重启”或“手动切换到登录界面”')
     return
   }
   if (res.startsWith('PATCH_FAILED:')) {
-    alert('写入账号环境失败：' + res)
+    showMessage('写入账号环境失败：' + res)
     return
   }
   if (res !== 'STARTED') {
-    alert('执行失败：' + res)
+    showMessage('执行失败：' + res)
     return
   }
 
   statusTip.value = '流程已启动，正在等待识别登录界面...'
-  showStatusModal.value = true
+  monitorActive.value = true
   modalType.value = 'status'
 }
 
@@ -219,11 +226,20 @@ const handleStopMonitor = () => {
 
 const confirmStopMonitor = async () => {
   await StopMonitor()
+  monitorActive.value = false
   modalType.value = ''
-  showStatusModal.value = false
+}
+
+const openStatusModal = () => {
+  if (!monitorActive.value) {
+    showMessage('当前无进行中的登录流程')
+    return
+  }
+  modalType.value = 'status'
 }
 
 const closeModal = () => {
+  pendingDeleteAccount.value = null
   modalType.value = ''
 }
 
@@ -238,13 +254,18 @@ const handleBrowse = async id => {
 
 const handleSavePaths = async () => {
   await SaveGamePaths(settings.game_paths)
-  modalType.value = ''
-  alert('已保存')
+  messageText.value = '游戏执行文件路径已保存'
+  modalType.value = 'message'
 }
 
 const toggleTheme = async () => {
   settings.theme = settings.theme === 'theme-darcula' ? 'theme-monokai' : 'theme-darcula'
   await SaveTheme(settings.theme)
+}
+
+const showMessage = msg => {
+  messageText.value = msg
+  modalType.value = 'message'
 }
 
 const togglePassword = async acc => {
@@ -257,14 +278,38 @@ const togglePassword = async acc => {
 }
 
 const handleDelete = async acc => {
-  if (confirm(`确定删除 ${acc.alias} 吗？`)) {
-    await DeleteAccount(acc.id)
-    await loadAll()
+  pendingDeleteAccount.value = acc
+  messageText.value = `确定删除账号「${acc.alias}」吗？`
+  modalType.value = 'deleteConfirm'
+}
+
+const confirmDelete = async () => {
+  if (!pendingDeleteAccount.value) {
+    modalType.value = ''
+    return
   }
+  await DeleteAccount(pendingDeleteAccount.value.id)
+  pendingDeleteAccount.value = null
+  modalType.value = ''
+  await loadAll()
 }
 
 const handleExport = async () => {
-  alert('备份已导出: ' + (await ExportBackup()))
+  showMessage('备份已导出: ' + (await ExportBackup()))
+}
+
+const handleCaptureDebug = async () => {
+  const gameID = selectedAccount.value?.game_id || activeTab.value
+  const fileName = await CaptureDebugWindow(gameID)
+  if (fileName === 'FAILED_CAPTURE') {
+    showMessage('截图失败：未找到目标游戏窗口，请先打开对应游戏窗口')
+    return
+  }
+  if (fileName === 'FAILED_WRITE') {
+    showMessage('截图失败：无法写入项目根目录')
+    return
+  }
+  showMessage('调试截图已保存到项目根目录：' + fileName)
 }
 
 const copyToClipboard = text => {
@@ -308,15 +353,43 @@ body {
 
 .tab-bar {
   display: flex;
+  justify-content: center;
+  align-items: stretch;
+  gap: 10px;
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 12px 0;
+  margin: 0 auto;
 }
 
 .tab {
-  padding: 10px 20px;
+  padding: 10px 14px;
   cursor: pointer;
   border-bottom: 2px solid transparent;
   font-size: 14px;
+  text-align: center;
+  box-sizing: border-box;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 860px) {
+  .tab-bar {
+    gap: 8px;
+    padding: 8px 10px 0;
+  }
+
+  .tab {
+    font-size: 13px;
+    padding: 9px 10px;
+    max-width: none;
+  }
 }
 
 .tab.active {
@@ -343,3 +416,4 @@ body {
   color: var(--text-dim);
 }
 </style>
+

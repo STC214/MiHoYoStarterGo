@@ -9,7 +9,6 @@ import (
 	"math/rand"
 	"os"
 	"strings"
-	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -18,59 +17,48 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// StartAutomationMonitor 核心监控逻辑
-// 新增了 cancel *bool 参数用于接收用户的手动停止指令
 func StartAutomationMonitor(ctx context.Context, gameID, user, pwd string, isFirst bool, pause *bool, cancel *bool) {
+	_ = isFirst
 	rand.Seed(time.Now().UnixNano())
 
 	go func() {
-		fmt.Printf("[系统] 监控启动：正在为账号 %s 监视登录状态...\n", user)
-		tmpImgPath := fmt.Sprintf("temp_%d.png", time.Now().Unix()) // 使用动态文件名避免冲突
-
-		// 根据游戏 ID 确定窗口标题
-		windowName := "原神"
-		if gameID == "StarRailCN" {
-			windowName = "崩坏：星穹铁道"
-		} else if gameID == "ZZZCN" {
-			windowName = "绝区零"
-		}
+		fmt.Printf("[系统] 监控启动: game=%s user=%s\n", gameID, user)
+		runtime.EventsEmit(ctx, "monitor_status", "流程已启动，正在等待游戏窗口...")
+		tmpImgPath := fmt.Sprintf("temp_%d.png", time.Now().UnixNano())
+		starRailSwitched := false
+		lastOCRSnapshot := ""
+		lastStatusTip := ""
 
 		ticker := time.NewTicker(300 * time.Millisecond)
 		defer func() {
 			ticker.Stop()
-			os.Remove(tmpImgPath) // 协程结束时清理临时图片资源
+			_ = os.Remove(tmpImgPath)
 		}()
 
 		for range ticker.C {
-			// 1. [新增] 检查手动取消信号
 			if *cancel {
-				fmt.Printf("[系统] 接收到用户终止信号，已回收 OCR 资源并关闭协程。\n")
-				return // 彻底退出协程
+				fmt.Println("[系统] 收到取消信号，结束监控")
+				runtime.EventsEmit(ctx, "monitor_finished", "CANCELLED")
+				return
 			}
-
-			// 2. 检查暂停状态
 			if *pause {
 				continue
 			}
-
-			// 3. 检查进程是否运行
 			if !IsGameRunning(gameID) {
 				continue
 			}
 
-			// 4. 寻找窗口句柄并置顶
-			hwnd := win.FindWindow(nil, syscall.StringToUTF16Ptr(windowName))
-			var rect win.RECT
-			if hwnd != 0 {
-				win.SetForegroundWindow(hwnd)
-				win.GetWindowRect(hwnd, &rect)
-				time.Sleep(100 * time.Millisecond)
-			} else {
+			hwnd := GetWindowHandleByGameID(gameID)
+			if hwnd == 0 {
 				continue
 			}
 
-			// 5. 截图
-			img, err := CaptureWindow(windowName)
+			win.SetForegroundWindow(hwnd)
+			var rect win.RECT
+			win.GetWindowRect(hwnd, &rect)
+			time.Sleep(100 * time.Millisecond)
+
+			img, err := CaptureWindowByHandle(hwnd)
 			if err != nil {
 				continue
 			}
@@ -78,58 +66,142 @@ func StartAutomationMonitor(ctx context.Context, gameID, user, pwd string, isFir
 			if err != nil {
 				continue
 			}
-			png.Encode(f, img)
-			f.Close()
+			_ = png.Encode(f, img)
+			_ = f.Close()
 
-			// 6. OCR 识别
+			if gameID == "StarRailCN" {
+				if df, derr := os.Create("debug_capture_starrail.png"); derr == nil {
+					_ = png.Encode(df, img)
+					_ = df.Close()
+				}
+			}
+
 			textPoints, err := RecognizeWithPos(tmpImgPath)
 			if err != nil {
 				continue
 			}
-
-			// 7. 判定画面 B (登录框) 并执行填充
-			if isImageBStrict(textPoints) {
-				fmt.Println("[流水线] 检测到登录界面，开始执行账密填充...")
-				executeFullSequence(windowName, textPoints, user, pwd)
+			if len(textPoints) > 0 {
+				tip := fmt.Sprintf("OCR识别成功：%d 条文本", len(textPoints))
+				if tip != lastStatusTip {
+					lastStatusTip = tip
+					runtime.EventsEmit(ctx, "monitor_status", tip)
+				}
 			}
 
-			// 8. 判定画面 A (进入游戏成功) 并提取 Token
+			snapshot := buildOCRSnapshot(textPoints, 24)
+			if snapshot != lastOCRSnapshot {
+				lastOCRSnapshot = snapshot
+				fmt.Printf("[OCR][%s]\n%s\n", gameID, snapshot)
+			}
+
+			if gameID == "StarRailCN" && !starRailSwitched && isStarRailVerifyPage(textPoints) {
+				if x, y, ok := findKeywordCenter(textPoints, []string{"账号密码", "賬號密碼"}); ok {
+					left, top := int(rect.Left), int(rect.Top)
+					fmt.Println("[StarRail] 检测到验证码页，点击“账号密码”切换登录方式")
+					runtime.EventsEmit(ctx, "monitor_status", "已识别验证码页，正在切换到账号密码登录...")
+					randClick(left+x, top+y, 8, 4)
+					starRailSwitched = true
+					time.Sleep(500 * time.Millisecond)
+					continue
+				}
+			}
+
+			if isLoginPage(gameID, textPoints) {
+				fmt.Println("[流水线] 检测到登录界面，开始填充账号密码")
+				runtime.EventsEmit(ctx, "monitor_status", "已识别登录界面，正在自动填充账号密码...")
+				executeFullSequenceByHandle(hwnd, textPoints, user, pwd)
+			}
+
 			windowHeight := int(rect.Bottom - rect.Top)
 			if isConfirmedImageA(textPoints, windowHeight) {
 				fmt.Println("========================================")
-				fmt.Println(" [验证成功] 已登录成功，正在提取数据...")
+				fmt.Println("[成功] 检测到登录成功，开始写回账号数据")
+				runtime.EventsEmit(ctx, "monitor_status", "已识别登录成功，正在写回账号数据...")
 
 				err := finalizeAccountStorage(gameID, user)
-
 				if err != nil {
-					fmt.Printf(" [错误] 数据存档失败: %v\n", err)
+					fmt.Printf("[错误] 数据写回失败: %v\n", err)
 					runtime.EventsEmit(ctx, "monitor_finished", "FAILED")
 				} else {
-					fmt.Println(" [成功] 数据已更新至 config.json")
+					fmt.Println("[成功] config.json 已更新")
 					runtime.EventsEmit(ctx, "monitor_finished", "SUCCESS")
 				}
 				fmt.Println("========================================")
-				return // 任务完成，退出协程
+				return
 			}
 		}
 	}()
 }
 
-// ---------------- 判定与数据存储逻辑 ----------------
+func isStarRailVerifyPage(points []TextPoint) bool {
+	hasCode := hasKeyword(points, "验证码")
+	hasSend := hasKeyword(points, "发送")
+	hasAccountPwd := hasAnyKeyword(points, []string{"账号密码", "賬號密碼"})
+	return hasCode && hasSend && hasAccountPwd
+}
 
-func isImageBStrict(points []TextPoint) bool {
-	hasAccountField := false
-	hasAgreement := false
+func isLoginPage(gameID string, points []TextPoint) bool {
+	if gameID == "StarRailCN" {
+		hasPhoneInput := hasAnyKeyword(points, []string{"输入手机号/邮箱", "输入手机号", "手机号/邮箱", "輸入手機號/郵箱", "輸入手機號"})
+		hasPwdInput := hasAnyKeyword(points, []string{"输入密码", "輸入密碼", "密码", "密碼"})
+		hasEnter := hasAnyKeyword(points, []string{"进入游戏", "進入遊戲"})
+		hasForgot := hasAnyKeyword(points, []string{"忘记密码", "忘記密碼"})
+		return hasPhoneInput && hasPwdInput && hasEnter && hasForgot
+	}
+
+	hasAccount := hasAnyKeyword(points, []string{"手机号", "手機號", "邮箱", "郵箱", "输入手机号", "輸入手機號"})
+	hasAgreement := hasAnyKeyword(points, []string{"同意", "已阅读", "已閱讀"})
+	return hasAccount && hasAgreement
+}
+
+func hasAnyKeyword(points []TextPoint, keywords []string) bool {
 	for _, p := range points {
-		t := p.Text
-		if strings.Contains(t, "手机号") || strings.Contains(t, "邮箱") {
-			hasAccountField = true
-		}
-		if strings.Contains(t, "同意") || strings.Contains(t, "已阅读") {
-			hasAgreement = true
+		for _, kw := range keywords {
+			if strings.Contains(p.Text, kw) {
+				return true
+			}
 		}
 	}
-	return hasAccountField && hasAgreement
+	return false
+}
+
+func hasKeyword(points []TextPoint, keyword string) bool {
+	for _, p := range points {
+		if strings.Contains(p.Text, keyword) {
+			return true
+		}
+	}
+	return false
+}
+
+func findKeywordCenter(points []TextPoint, keywords []string) (int, int, bool) {
+	for _, p := range points {
+		for _, kw := range keywords {
+			if strings.Contains(p.Text, kw) {
+				return p.X, p.Y, true
+			}
+		}
+	}
+	return 0, 0, false
+}
+
+func buildOCRSnapshot(points []TextPoint, maxItems int) string {
+	if len(points) == 0 {
+		return "(empty)"
+	}
+	if maxItems <= 0 {
+		maxItems = len(points)
+	}
+
+	items := make([]string, 0, maxItems+1)
+	for i, p := range points {
+		if i >= maxItems {
+			items = append(items, fmt.Sprintf("... (%d more)", len(points)-maxItems))
+			break
+		}
+		items = append(items, fmt.Sprintf("[%d] \"%s\" @(%d,%d)", i+1, p.Text, p.X, p.Y))
+	}
+	return strings.Join(items, "\n")
 }
 
 func isConfirmedImageA(points []TextPoint, windowHeight int) bool {
@@ -140,7 +212,7 @@ func isConfirmedImageA(points []TextPoint, windowHeight int) bool {
 	for _, p := range points {
 		if p.Y > bottomThreshold {
 			txt := p.Text
-			if strings.Contains(txt, "进入游戏") || strings.Contains(txt, "点击进入") {
+			if strings.Contains(txt, "进入游戏") || strings.Contains(txt, "点击进入") || strings.Contains(txt, "進入遊戲") {
 				hasTargetWord = true
 			} else if containsChinese(txt) {
 				hasInterference = true
@@ -151,7 +223,6 @@ func isConfirmedImageA(points []TextPoint, windowHeight int) bool {
 }
 
 func finalizeAccountStorage(gameID, username string) error {
-	// 延迟读取注册表，确保游戏已经把最新数据写进去
 	time.Sleep(2 * time.Second)
 
 	tokenBytes, err := ReadToken(gameID)
@@ -181,47 +252,50 @@ func finalizeAccountStorage(gameID, username string) error {
 	return SaveConfig(cfg)
 }
 
-// ---------------- 键鼠模拟执行 ----------------
+func executeFullSequenceByHandle(hwnd win.HWND, points []TextPoint, user, pwd string) {
+	if hwnd == 0 {
+		return
+	}
 
-func executeFullSequence(windowName string, points []TextPoint, user, pwd string) {
-	hwnd := win.FindWindow(nil, syscall.StringToUTF16Ptr(windowName))
 	var rect win.RECT
 	win.GetWindowRect(hwnd, &rect)
 	left, top := int(rect.Left), int(rect.Top)
 
-	// 1. 填写账号密码
+	filledUser := false
+	filledPwd := false
+
 	for _, p := range points {
-		if strings.Contains(p.Text, "手机号") || strings.Contains(p.Text, "邮箱") {
+		if !filledUser && hasAnyKeyword([]TextPoint{p}, []string{"手机号", "手機號", "邮箱", "郵箱", "输入手机号", "輸入手機號", "账号密码", "賬號密碼"}) {
 			randClick(left+p.X, top+p.Y, 10, 2)
 			typeAction(user)
+			filledUser = true
 		}
-		if strings.Contains(p.Text, "密码") && !strings.Contains(p.Text, "忘记") {
+		if !filledPwd && hasAnyKeyword([]TextPoint{p}, []string{"密码", "密碼", "输入密码", "輸入密碼"}) && !hasAnyKeyword([]TextPoint{p}, []string{"忘记", "忘記"}) {
 			randClick(left+p.X, top+p.Y, 10, 2)
 			typeAction(pwd)
+			filledPwd = true
 		}
 	}
 
-	// 2. 勾选协议 (找特定的圆形符号)
 	for _, p := range points {
-		if strings.Contains(p.Text, "同意") && (strings.HasPrefix(p.Text, "①") || strings.HasPrefix(p.Text, "○") || strings.HasPrefix(p.Text, "〇")) {
-			charCount := utf8.RuneCountInString(p.Text)
-			if charCount > 0 {
-				singleCharWidth := p.Width / charCount
-				randClickInCircle(left+p.LeftX+(singleCharWidth/2), top+p.Y, 4)
-				time.Sleep(400 * time.Millisecond)
+		if strings.Contains(p.Text, "同意") || strings.Contains(p.Text, "已阅读") || strings.Contains(p.Text, "已閱讀") {
+			if strings.HasPrefix(p.Text, "①") || strings.HasPrefix(p.Text, "☐") || strings.HasPrefix(p.Text, "□") || strings.HasPrefix(p.Text, "◯") || strings.HasPrefix(p.Text, "○") {
+				charCount := utf8.RuneCountInString(p.Text)
+				if charCount > 0 {
+					singleCharWidth := p.Width / charCount
+					randClickInCircle(left+p.LeftX+(singleCharWidth/2), top+p.Y, 4)
+					time.Sleep(400 * time.Millisecond)
+				}
 			}
 		}
 	}
 
-	// 3. 点击进入/登录
 	for _, p := range points {
-		if (strings.Contains(p.Text, "进入") || strings.Contains(p.Text, "开始")) && len(p.Text) <= 12 {
+		if (strings.Contains(p.Text, "进入") || strings.Contains(p.Text, "進入") || strings.Contains(p.Text, "登录") || strings.Contains(p.Text, "登錄") || strings.Contains(p.Text, "开始") || strings.Contains(p.Text, "開始")) && len(p.Text) <= 16 {
 			randClick(left+p.X, top+p.Y+5, 15, 5)
 		}
 	}
 }
-
-// ---------------- 基础工具函数 ----------------
 
 func containsChinese(s string) bool {
 	for _, r := range s {
