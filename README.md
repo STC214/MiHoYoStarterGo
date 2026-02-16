@@ -78,6 +78,8 @@ wails build -clean -platform windows/amd64 -ldflags "-s -w"
 
 更新说明：
 
+v4.9 细节优化
+
 v4.0 崩铁模块完美搞定
 
 v3.0 原神模块完美搞定

@@ -42,6 +42,10 @@ export function PrepareAccountEnvironment(arg1) {
   return window['go']['main']['App']['PrepareAccountEnvironment'](arg1);
 }
 
+export function SaveAccountsOrder(arg1) {
+  return window['go']['main']['App']['SaveAccountsOrder'](arg1);
+}
+
 export function SaveGamePaths(arg1) {
   return window['go']['main']['App']['SaveGamePaths'](arg1);
 }
@@ -68,4 +72,8 @@ export function StopMonitor() {
 
 export function TogglePauseMonitor() {
   return window['go']['main']['App']['TogglePauseMonitor']();
+}
+
+export function UpdateAccount(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['UpdateAccount'](arg1, arg2, arg3, arg4);
 }

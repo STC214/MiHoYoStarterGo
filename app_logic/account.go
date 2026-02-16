@@ -68,3 +68,81 @@ func GetPlaintext(enc string) string {
 	res, _ := logic.DecryptString(enc)
 	return res
 }
+
+func UpdateAccount(id, alias, user, pwd string) string {
+	if strings.TrimSpace(id) == "" || strings.TrimSpace(alias) == "" || strings.TrimSpace(user) == "" {
+		return "MISSING_FIELDS"
+	}
+
+	cfg, err := logic.LoadConfig()
+	if err != nil {
+		return "LOAD_CONFIG_FAILED"
+	}
+
+	target := -1
+	for i, acc := range cfg.Accounts {
+		if acc.ID == id {
+			target = i
+			break
+		}
+	}
+	if target < 0 {
+		return "ACCOUNT_NOT_FOUND"
+	}
+
+	cfg.Accounts[target].Alias = alias
+	cfg.Accounts[target].Username = user
+
+	// Empty password means keep existing encrypted password.
+	if strings.TrimSpace(pwd) != "" {
+		encPwd, err := logic.EncryptString(pwd)
+		if err != nil {
+			return "ENCRYPT_FAILED"
+		}
+		cfg.Accounts[target].Password = encPwd
+	}
+
+	if err := logic.SaveConfig(cfg); err != nil {
+		return "SAVE_FAILED"
+	}
+	return "SUCCESS"
+}
+
+func SaveAccountsOrder(ids []string) string {
+	cfg, err := logic.LoadConfig()
+	if err != nil {
+		return "LOAD_CONFIG_FAILED"
+	}
+
+	if len(ids) != len(cfg.Accounts) {
+		return "ORDER_LENGTH_MISMATCH"
+	}
+
+	accMap := make(map[string]logic.Account, len(cfg.Accounts))
+	for _, acc := range cfg.Accounts {
+		accMap[acc.ID] = acc
+	}
+
+	seen := make(map[string]bool, len(ids))
+	ordered := make([]logic.Account, 0, len(ids))
+	for _, id := range ids {
+		if strings.TrimSpace(id) == "" {
+			return "ORDER_INVALID_ID"
+		}
+		if seen[id] {
+			return "ORDER_DUPLICATE_ID"
+		}
+		acc, ok := accMap[id]
+		if !ok {
+			return "ORDER_ID_NOT_FOUND"
+		}
+		seen[id] = true
+		ordered = append(ordered, acc)
+	}
+
+	cfg.Accounts = ordered
+	if err := logic.SaveConfig(cfg); err != nil {
+		return "SAVE_FAILED"
+	}
+	return "SUCCESS"
+}

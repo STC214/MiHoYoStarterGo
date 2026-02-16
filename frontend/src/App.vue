@@ -23,15 +23,26 @@
 
     <main class="content-area">
       <div v-if="filteredAccounts.length > 0" class="account-grid">
-        <AccountCard
+        <div
           v-for="acc in filteredAccounts"
           :key="acc.id"
-          :account="acc"
-          @copy="copyToClipboard"
-          @togglePass="togglePassword"
-          @run="handleRunRequest"
-          @delete="handleDelete"
-        />
+          class="account-draggable"
+          :class="{ 'drag-over': dragState.overId === acc.id && dragState.sourceId !== acc.id }"
+          draggable="true"
+          @dragstart="onCardDragStart(acc, $event)"
+          @dragover="onCardDragOver(acc, $event)"
+          @drop="onCardDrop(acc, $event)"
+          @dragend="onCardDragEnd"
+        >
+          <AccountCard
+            :account="acc"
+            @copy="copyToClipboard"
+            @togglePass="togglePassword"
+            @run="handleRunRequest"
+            @edit="openEditModal"
+            @delete="handleDelete"
+          />
+        </div>
       </div>
       <div v-else class="empty-state">暂无账号，请点击上方“添加账号”</div>
     </main>
@@ -48,6 +59,7 @@
       :gamePaths="settings.game_paths"
       @close="closeModal"
       @confirmAdd="handleAdd"
+      @confirmEdit="handleEdit"
       @runAction="handleRunAction"
       @captureDebug="handleCaptureDebug"
       @togglePause="togglePause"
@@ -72,9 +84,11 @@ import {
   GetSettings,
   SaveTheme,
   SaveGamePaths,
+  SaveAccountsOrder,
   SelectGameFile,
   AddAccount,
   DeleteAccount,
+  UpdateAccount,
   GetPlaintext,
   ExportBackup,
   CaptureDebugWindow,
@@ -100,9 +114,15 @@ const pauseStatus = ref('RUNNING')
 const monitorActive = ref(false)
 const selectedAccount = ref(null)
 const pendingDeleteAccount = ref(null)
+const editingAccountId = ref('')
 const runContext = reactive({
   isRunning: false,
   alias: ''
+})
+const dragState = reactive({
+  sourceId: '',
+  overId: '',
+  saving: false
 })
 
 const settings = reactive({
@@ -155,10 +175,19 @@ const loadAll = async () => {
 }
 
 const openAddModal = () => {
+  editingAccountId.value = ''
   newAcc.alias = ''
   newAcc.username = ''
   newAcc.password = ''
   modalType.value = 'add'
+}
+
+const openEditModal = acc => {
+  editingAccountId.value = acc.id
+  newAcc.alias = acc.alias || ''
+  newAcc.username = acc.username || ''
+  newAcc.password = ''
+  modalType.value = 'edit'
 }
 
 const handleAdd = async () => {
@@ -168,6 +197,21 @@ const handleAdd = async () => {
     await loadAll()
   } else {
     showMessage('保存失败: ' + res)
+  }
+}
+
+const handleEdit = async () => {
+  if (!editingAccountId.value) {
+    showMessage('编辑目标无效，请重试')
+    return
+  }
+  const res = await UpdateAccount(editingAccountId.value, newAcc.alias, newAcc.username, newAcc.password)
+  if (res === 'SUCCESS') {
+    editingAccountId.value = ''
+    modalType.value = ''
+    await loadAll()
+  } else {
+    showMessage('修改失败: ' + res)
   }
 }
 
@@ -240,6 +284,7 @@ const openStatusModal = () => {
 
 const closeModal = () => {
   pendingDeleteAccount.value = null
+  editingAccountId.value = ''
   modalType.value = ''
 }
 
@@ -314,6 +359,98 @@ const handleCaptureDebug = async () => {
 
 const copyToClipboard = text => {
   navigator.clipboard.writeText(text)
+}
+
+const getAccGameID = acc => acc.game_id || acc.GameID
+
+const reorderActiveTabAccounts = (sourceID, targetID) => {
+  if (!sourceID || !targetID || sourceID === targetID) {
+    return false
+  }
+
+  const source = settings.accounts.find(acc => acc.id === sourceID)
+  const target = settings.accounts.find(acc => acc.id === targetID)
+  if (!source || !target) {
+    return false
+  }
+  if (getAccGameID(source) !== activeTab.value || getAccGameID(target) !== activeTab.value) {
+    return false
+  }
+
+  const tabAccounts = settings.accounts.filter(acc => getAccGameID(acc) === activeTab.value)
+  const from = tabAccounts.findIndex(acc => acc.id === sourceID)
+  const to = tabAccounts.findIndex(acc => acc.id === targetID)
+  if (from < 0 || to < 0 || from === to) {
+    return false
+  }
+
+  const reordered = [...tabAccounts]
+  const [moved] = reordered.splice(from, 1)
+  reordered.splice(to, 0, moved)
+
+  let p = 0
+  settings.accounts = settings.accounts.map(acc => {
+    if (getAccGameID(acc) !== activeTab.value) {
+      return acc
+    }
+    const replacement = reordered[p]
+    p += 1
+    return replacement
+  })
+  return true
+}
+
+const saveAccountOrder = async () => {
+  const order = settings.accounts.map(acc => acc.id)
+  return SaveAccountsOrder(order)
+}
+
+const resetDragState = () => {
+  dragState.sourceId = ''
+  dragState.overId = ''
+}
+
+const onCardDragStart = (acc, event) => {
+  dragState.sourceId = acc.id
+  dragState.overId = acc.id
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', acc.id)
+  }
+}
+
+const onCardDragOver = (acc, event) => {
+  event.preventDefault()
+  if (dragState.sourceId && dragState.sourceId !== acc.id) {
+    dragState.overId = acc.id
+  }
+}
+
+const onCardDrop = async (acc, event) => {
+  event.preventDefault()
+  if (!dragState.sourceId || dragState.saving) {
+    resetDragState()
+    return
+  }
+
+  const snapshot = [...settings.accounts]
+  const moved = reorderActiveTabAccounts(dragState.sourceId, acc.id)
+  resetDragState()
+  if (!moved) {
+    return
+  }
+
+  dragState.saving = true
+  const res = await saveAccountOrder()
+  dragState.saving = false
+  if (res !== 'SUCCESS') {
+    settings.accounts = snapshot
+    showMessage('排序保存失败: ' + res)
+  }
+}
+
+const onCardDragEnd = () => {
+  resetDragState()
 }
 </script>
 
@@ -402,12 +539,43 @@ body {
   flex: 1;
   padding: 20px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary) var(--bg-card);
+}
+
+.content-area::-webkit-scrollbar {
+  width: 10px;
+}
+
+.content-area::-webkit-scrollbar-track {
+  background: var(--bg-card);
+  border-left: 1px solid var(--border);
+}
+
+.content-area::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border: 2px solid var(--bg-card);
+  border-radius: 999px;
+}
+
+.content-area::-webkit-scrollbar-thumb:hover {
+  filter: brightness(1.12);
 }
 
 .account-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 15px;
+}
+
+.account-draggable {
+  cursor: grab;
+}
+
+.account-draggable.drag-over {
+  outline: 2px dashed var(--primary);
+  outline-offset: 4px;
+  border-radius: 8px;
 }
 
 .empty-state {

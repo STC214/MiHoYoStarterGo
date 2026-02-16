@@ -22,6 +22,8 @@ export function IsGameRunning(arg1:string):Promise<boolean>;
 
 export function PrepareAccountEnvironment(arg1:logic.Account):Promise<string>;
 
+export function SaveAccountsOrder(arg1:Array<string>):Promise<string>;
+
 export function SaveGamePaths(arg1:Record<string, string>):Promise<void>;
 
 export function SaveTheme(arg1:string):Promise<void>;
@@ -35,3 +37,5 @@ export function StartMonitor(arg1:logic.Account):Promise<void>;
 export function StopMonitor():Promise<void>;
 
 export function TogglePauseMonitor():Promise<void>;
+
+export function UpdateAccount(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;

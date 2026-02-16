@@ -21,9 +21,31 @@
   width: min(560px, 100%);
   max-height: min(85vh, 720px);
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--primary) var(--bg-app);
   border: 1px solid var(--border);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
   color: var(--text);
+}
+
+.modal-content::-webkit-scrollbar {
+  width: 10px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: var(--bg-app);
+  border-left: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border: 2px solid var(--bg-app);
+  border-radius: 999px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+  filter: brightness(1.12);
 }
 
 .path-input-group {

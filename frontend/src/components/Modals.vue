@@ -34,6 +34,39 @@
         </div>
       </div>
 
+      <div v-if="activeType === 'edit'" class="modal-content">
+        <h3>编辑账号</h3>
+        <div class="form-group">
+          <label>别名</label>
+          <input
+            :value="newAcc.alias"
+            @input="updateNewAcc('alias', $event.target.value)"
+            placeholder="如：大号"
+          />
+        </div>
+        <div class="form-group">
+          <label>游戏账号</label>
+          <input
+            :value="newAcc.username"
+            @input="updateNewAcc('username', $event.target.value)"
+            placeholder="手机号/邮箱"
+          />
+        </div>
+        <div class="form-group">
+          <label>游戏密码（留空表示不修改）</label>
+          <input
+            :value="newAcc.password"
+            @input="updateNewAcc('password', $event.target.value)"
+            type="password"
+            placeholder="不修改可留空"
+          />
+        </div>
+        <div class="modal-actions">
+          <button @click="$emit('close')">取消</button>
+          <button class="btn-primary" @click="$emit('confirmEdit')">保存修改</button>
+        </div>
+      </div>
+
       <div v-if="activeType === 'runAction'" class="modal-content">
         <h3>切换账号：{{ runContext.alias }}</h3>
         <p class="modal-desc">{{ runContext.isRunning ? '检测到目标游戏进程正在运行，请选择处理方式。' : '检测到目标游戏进程未运行，请选择处理方式。' }}</p>
@@ -129,6 +162,7 @@ const props = defineProps({
 defineEmits([
   'close',
   'confirmAdd',
+  'confirmEdit',
   'runAction',
   'captureDebug',
   'togglePause',

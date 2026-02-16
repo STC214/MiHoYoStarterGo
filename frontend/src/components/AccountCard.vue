@@ -15,6 +15,9 @@
 
     <div class="card-actions">
       <button class="btn-primary" @click="$emit('run', account)">切换并登录</button>
+      <button class="btn-edit-mini" @click="$emit('edit', account)" title="编辑账号">
+        <span class="icon">✏️</span>
+      </button>
       <button class="btn-delete-mini" @click="$emit('delete', account)" title="删除账号">
         <span class="icon">🗑️</span>
       </button>
@@ -27,7 +30,7 @@ defineProps({
   account: Object
 })
 
-defineEmits(['copy', 'togglePass', 'run', 'delete'])
+defineEmits(['copy', 'togglePass', 'run', 'edit', 'delete'])
 </script>
 
 <style scoped>
@@ -108,9 +111,28 @@ defineEmits(['copy', 'togglePass', 'run', 'delete'])
   transition: all 0.2s ease;
 }
 
-.btn-delete-mini .icon {
+.btn-edit-mini {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: #777;
+  padding: 0 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btn-delete-mini .icon,
+.btn-edit-mini .icon {
   font-size: 14px;
   line-height: 1;
+}
+
+.btn-edit-mini:hover {
+  border-color: #4d9de0;
+  color: #4d9de0;
 }
 
 .btn-delete-mini:hover {

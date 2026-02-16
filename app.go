@@ -73,8 +73,16 @@ func (a *App) DeleteAccount(id string) string {
 	return app_logic.DeleteAccount(id)
 }
 
+func (a *App) UpdateAccount(id, alias, user, pwd string) string {
+	return app_logic.UpdateAccount(id, alias, user, pwd)
+}
+
 func (a *App) GetPlaintext(enc string) string {
 	return app_logic.GetPlaintext(enc)
+}
+
+func (a *App) SaveAccountsOrder(ids []string) string {
+	return app_logic.SaveAccountsOrder(ids)
 }
 
 // --- 鐟奉厾鐤?---
