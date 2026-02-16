@@ -44,6 +44,9 @@ defineEmits(['toggleTheme', 'handleExport', 'openPath', 'openAdd', 'openStatus']
   align-items: stretch;
   background: var(--bg-card);
   padding: 6px 10px;
+  height: auto;
+  min-height: 46px;
+  overflow: visible;
   box-sizing: border-box;
   gap: 0;
 }
@@ -51,7 +54,7 @@ defineEmits(['toggleTheme', 'handleExport', 'openPath', 'openAdd', 'openStatus']
 .menu-item,
 .status-indicator-mini {
   min-width: max-content;
-  padding: 4px 0.55em;
+  padding: 6px 0.55em;
   border-radius: 6px;
   cursor: pointer;
   user-select: none;
@@ -90,7 +93,7 @@ defineEmits(['toggleTheme', 'handleExport', 'openPath', 'openAdd', 'openStatus']
 }
 
 .menu-text {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.1;
   white-space: nowrap;
 }

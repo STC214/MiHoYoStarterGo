@@ -4,6 +4,7 @@ import (
 	"MiHoYoStarterGo/app_logic"
 	"MiHoYoStarterGo/logic"
 	"context"
+	"sync"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -12,6 +13,7 @@ type App struct {
 	ctx          context.Context
 	IsPaused     bool
 	ShouldCancel bool
+	trayOnce     sync.Once
 }
 
 func NewApp() *App {
@@ -23,6 +25,9 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.trayOnce.Do(func() {
+		a.initSystemTray()
+	})
 
 	// Width policy:
 	// - max width: 620

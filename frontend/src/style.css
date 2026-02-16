@@ -52,7 +52,8 @@ body, html, #app {
 
 /* 菜单栏 */
 .menu-bar {
-    height: 30px;
+    min-height: 46px;
+    height: auto;
     background: var(--bg-header);
     display: flex;
     gap: 20px;
