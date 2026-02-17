@@ -10,6 +10,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-vgo/robotgo"
@@ -44,12 +46,27 @@ type loginRuntimeState struct {
 	agreementClickedAt time.Time
 }
 
+type preOCRGateState struct {
+	ocrEnabled  bool
+	lastHintAt  time.Time
+	lastHintMsg string
+}
+
 func isDebugMode() bool {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv("MHY_DEBUG")))
 	return v == "1" || v == "true" || v == "on" || v == "yes"
 }
 
-func StartAutomationMonitor(ctx context.Context, gameID, user, pwd string, isFirst bool, pause *bool, cancel *bool) {
+func getOCRIntervalByGame(gameID string) time.Duration {
+	switch gameID {
+	case "GenshinCN", "GenshinOS":
+		return 300 * time.Millisecond
+	default:
+		return 300 * time.Millisecond
+	}
+}
+
+func StartAutomationMonitor(ctx context.Context, gameID, user, pwd string, isFirst bool, directEnterFastPath bool, pause *atomic.Bool, cancel *atomic.Bool) {
 	_ = isFirst
 	rand.Seed(time.Now().UnixNano())
 	debugMode := isDebugMode()
@@ -57,6 +74,9 @@ func StartAutomationMonitor(ctx context.Context, gameID, user, pwd string, isFir
 	go func() {
 		fmt.Printf("[system] monitor started: game=%s user=%s\n", gameID, user)
 		runtime.EventsEmit(ctx, "monitor_status", "流程已启动，正在等待游戏窗口...")
+		if directEnterFastPath {
+			runtime.EventsEmit(ctx, "monitor_status", "快速完成模式已启用：命中成功组后直接回写并结束")
+		}
 
 		tmpRawPath := fmt.Sprintf("temp_raw_%d.png", time.Now().UnixNano())
 		defer func() {
@@ -69,17 +89,18 @@ func StartAutomationMonitor(ctx context.Context, gameID, user, pwd string, isFir
 		lastMatchLog := ""
 		zzzState := &zzzRuntimeState{}
 		loginState := &loginRuntimeState{userFieldY: -1}
+		preOCRGate := &preOCRGateState{}
 
-		ticker := time.NewTicker(300 * time.Millisecond)
+		ticker := time.NewTicker(getOCRIntervalByGame(gameID))
 		defer ticker.Stop()
 
 		for range ticker.C {
-			if *cancel {
+			if cancel.Load() {
 				fmt.Println("[system] cancel signal received, monitor stopped")
 				runtime.EventsEmit(ctx, "monitor_finished", "CANCELLED")
 				return
 			}
-			if *pause || !IsGameRunning(gameID) {
+			if pause.Load() || !IsGameRunning(gameID) {
 				continue
 			}
 
@@ -94,6 +115,26 @@ func StartAutomationMonitor(ctx context.Context, gameID, user, pwd string, isFir
 			if err != nil {
 				continue
 			}
+			if shouldDelayOCRByScene(gameID) && !preOCRGate.ocrEnabled {
+				ready, hint := isOCRWarmupReady(gameID, img)
+				if !ready {
+					if time.Since(preOCRGate.lastHintAt) >= 2*time.Second {
+						preOCRGate.lastHintAt = time.Now()
+						if hint == "" {
+							hint = "游戏启动中，检测到黑白启动页，暂不进行OCR..."
+						}
+						if hint != preOCRGate.lastHintMsg {
+							preOCRGate.lastHintMsg = hint
+							runtime.EventsEmit(ctx, "monitor_status", hint)
+						}
+					}
+					continue
+				}
+				preOCRGate.ocrEnabled = true
+				preOCRGate.lastHintMsg = ""
+				runtime.EventsEmit(ctx, "monitor_status", "启动门禁已解除，开始OCR识别")
+			}
+
 			if err := writePNG(tmpRawPath, img); err != nil {
 				continue
 			}
@@ -126,45 +167,19 @@ func StartAutomationMonitor(ctx context.Context, gameID, user, pwd string, isFir
 				}
 			}
 
-			if gameID == "StarRailCN" && !accountPwdSwitched && isStarRailVerifyPage(textPoints) {
-				if x, y, ok := findKeywordCenter(textPoints, []string{"账号密码"}); ok {
-					var rect win.RECT
-					win.GetWindowRect(hwnd, &rect)
-					runtime.EventsEmit(ctx, "monitor_status", "已识别验证码页，正在切换到账号密码登录")
-					randClick(int(rect.Left)+x, int(rect.Top)+y, 8, 4)
-					accountPwdSwitched = true
-					time.Sleep(500 * time.Millisecond)
-					continue
-				}
-			}
-
-			if gameID == "ZZZCN" {
-				if tryZZZFlow(ctx, hwnd, textPoints, user, pwd, zzzState) {
-					continue
-				}
-			}
-
-			// 协议弹窗优先：识别到“不同意 + 同意”就立即尝试点击，不受账号密码流程状态影响。
-			if gameID != "ZZZCN" && !loginState.agreementClicked &&
-				hasAnyKeywordStrict(textPoints, []string{"不同意"}) &&
-				hasAnyKeywordStrict(textPoints, []string{"同意"}) {
-				if clickSecondBlackAgreement(hwnd, img, textPoints) {
-					loginState.agreementClicked = true
-					loginState.agreementClickedAt = time.Now()
-					continue
-				}
-			}
-
-			if isLoginPage(gameID, textPoints) {
-				runtime.EventsEmit(ctx, "monitor_status", "已识别登录界面，开始执行登录流程")
-				executeFullSequenceByHandle(hwnd, img, textPoints, user, pwd, loginState)
-			}
-
 			var rect win.RECT
 			win.GetWindowRect(hwnd, &rect)
-			if (gameID == "ZZZCN" && isZZZScreenC(textPoints, int(rect.Bottom-rect.Top))) || (gameID != "ZZZCN" && isConfirmedAfterAgreement(textPoints, int(rect.Bottom-rect.Top), loginState)) {
-				fmt.Println("[success] login confirmed, writing account data back")
-				runtime.EventsEmit(ctx, "monitor_status", "已识别登录成功，正在写回账号数据...")
+			windowWidth := int(rect.Right - rect.Left)
+			windowHeight := int(rect.Bottom - rect.Top)
+			groups := detectScreenGroups(gameID, textPoints, img, windowWidth, windowHeight)
+
+			if groups.success {
+				fmt.Println("[success] success-group matched, writing account data back")
+				if directEnterFastPath {
+					runtime.EventsEmit(ctx, "monitor_status", "命中快速完成条件：检测到成功组，正在回写并结束流程...")
+				} else {
+					runtime.EventsEmit(ctx, "monitor_status", "检测到成功组，正在回写账号数据...")
+				}
 				if err := finalizeAccountStorage(gameID, user); err != nil {
 					fmt.Printf("[error] finalize account storage failed: %v\n", err)
 					runtime.EventsEmit(ctx, "monitor_finished", "FAILED")
@@ -172,6 +187,40 @@ func StartAutomationMonitor(ctx context.Context, gameID, user, pwd string, isFir
 					runtime.EventsEmit(ctx, "monitor_finished", "SUCCESS")
 				}
 				return
+			}
+
+			actionTaken := false
+
+			if gameID == "StarRailCN" && !accountPwdSwitched && groups.accountPwd {
+				if x, y, ok := findKeywordCenter(textPoints, []string{"账号密码"}); ok {
+					runtime.EventsEmit(ctx, "monitor_status", "识别到 +86/账号密码 组，正在切换账号密码登录...")
+					randClick(int(rect.Left)+x, int(rect.Top)+y, 8, 4)
+					accountPwdSwitched = true
+					time.Sleep(500 * time.Millisecond)
+					actionTaken = true
+				}
+			}
+
+			if gameID == "ZZZCN" {
+				if !actionTaken && tryZZZFlow(ctx, hwnd, textPoints, user, pwd, zzzState) {
+					actionTaken = true
+				}
+				if actionTaken {
+					continue
+				}
+			}
+
+			if !actionTaken && gameID != "ZZZCN" && groups.agreement && !loginState.agreementClicked {
+				if clickSecondBlackAgreement(hwnd, img, textPoints) {
+					loginState.agreementClicked = true
+					loginState.agreementClickedAt = time.Now()
+					actionTaken = true
+				}
+			}
+
+			if !actionTaken && gameID != "ZZZCN" && groups.login {
+				runtime.EventsEmit(ctx, "monitor_status", "识别到登录组，开始执行登录流程...")
+				executeFullSequenceByHandle(hwnd, img, textPoints, user, pwd, loginState)
 			}
 		}
 	}()
@@ -187,7 +236,7 @@ func tryZZZFlow(ctx context.Context, hwnd win.HWND, points []TextPoint, user, pw
 	if isZZZScreenA(points) {
 		if time.Since(st.lastClickAAt) >= 1200*time.Millisecond {
 			if x, y, ok := findKeywordCenter(points, []string{"账号密码"}); ok {
-				runtime.EventsEmit(ctx, "monitor_status", "绝区零：识别到画面A，点击账号密码")
+				runtime.EventsEmit(ctx, "monitor_status", "绝区零：识别到 +86/账号密码 组，点击账号密码")
 				randClick(left+x, top+y, 8, 4)
 				st.lastClickAAt = time.Now()
 			}
@@ -299,6 +348,114 @@ func isZZZScreenC(points []TextPoint, windowHeight int) bool {
 	return false
 }
 
+type screenGroups struct {
+	success    bool
+	login      bool
+	agreement  bool
+	accountPwd bool
+}
+
+func detectScreenGroups(gameID string, points []TextPoint, frame image.Image, windowWidth, windowHeight int) screenGroups {
+	g := screenGroups{}
+	g.success = isDirectEnterScreen(gameID, points, frame, windowWidth, windowHeight)
+	g.agreement = hasAnyKeywordStrict(points, []string{"不同意"}) && hasAnyKeywordStrict(points, []string{"同意"})
+
+	switch gameID {
+	case "StarRailCN":
+		g.login = isLoginPage(gameID, points)
+		g.accountPwd = isAccountPwdGroup(points)
+	case "ZZZCN":
+		g.login = isZZZScreenB(points)
+		g.accountPwd = isAccountPwdGroup(points)
+		if isZZZScreenC(points, windowHeight) {
+			g.success = true
+		}
+	default:
+		g.login = isLoginPage(gameID, points)
+	}
+	return g
+}
+
+func isAccountPwdGroup(points []TextPoint) bool {
+	return hasAnyKeyword(points, []string{"+86"}) && hasAnyKeyword(points, []string{"账号密码"})
+}
+
+func shouldDelayOCRByScene(gameID string) bool {
+	switch gameID {
+	case "GenshinCN", "GenshinOS", "StarRailCN", "ZZZCN":
+		return true
+	default:
+		return false
+	}
+}
+
+func isOCRWarmupReady(gameID string, img image.Image) (bool, string) {
+	if !shouldDelayOCRByScene(gameID) {
+		return true, ""
+	}
+	if isPureBlackWhiteSplash(img) {
+		return false, "检测到纯黑白/白黑启动页，暂不进行OCR"
+	}
+	return true, ""
+}
+
+func isPureBlackWhiteSplash(img image.Image) bool {
+	b := img.Bounds()
+	w := b.Dx()
+	h := b.Dy()
+	if w <= 0 || h <= 0 {
+		return false
+	}
+
+	stepX := maxInt(6, w/90)
+	stepY := maxInt(6, h/90)
+	total := 0
+	mono := 0
+	dark := 0
+	bright := 0
+	colorBuckets := make(map[int]int, 16)
+
+	for y := b.Min.Y; y < b.Max.Y; y += stepY {
+		for x := b.Min.X; x < b.Max.X; x += stepX {
+			r16, g16, b16, _ := img.At(x, y).RGBA()
+			r := int(r16 >> 8)
+			g := int(g16 >> 8)
+			bl := int(b16 >> 8)
+			lum := (299*r + 587*g + 114*bl) / 1000
+			total++
+			if lum <= 55 {
+				dark++
+			}
+			if lum >= 220 {
+				bright++
+			}
+			deltaMax := maxInt(absInt(r-g), maxInt(absInt(r-bl), absInt(g-bl)))
+			if deltaMax <= 16 {
+				mono++
+			}
+			qr := r >> 5
+			qg := g >> 5
+			qb := bl >> 5
+			key := (qr << 4) | (qg << 2) | qb
+			colorBuckets[key]++
+		}
+	}
+	if total == 0 {
+		return false
+	}
+
+	mainThreshold := maxInt(2, total/40)
+	mainColors := 0
+	for _, c := range colorBuckets {
+		if c >= mainThreshold {
+			mainColors++
+		}
+	}
+	monoRatio := float64(mono) / float64(total)
+	bwRatio := float64(dark+bright) / float64(total)
+	return monoRatio >= 0.93 && bwRatio >= 0.88 && mainColors <= 3
+}
+
 func writePNG(path string, img image.Image) error {
 	f, err := os.Create(path)
 	if err != nil {
@@ -309,9 +466,9 @@ func writePNG(path string, img image.Image) error {
 }
 
 func collectTargetMatches(gameID string, points []TextPoint) []string {
-	keywords := []string{"账号密码", "验证码", "发送", "输入手机号", "手机号", "邮箱", "输入密码", "密码", "同意", "登录", "进入游戏"}
+	keywords := []string{"账号密码", "验证码", "发送", "输入手机号", "手机号", "邮箱", "输入密码", "密码", "同意", "登录", "进入游戏", "点击进入", "开始游戏", "登出"}
 	if gameID == "ZZZCN" {
-		keywords = []string{"+86", "账号密码", "输入手机号", "邮箱", "用户", "点击进入"}
+		keywords = []string{"+86", "账号密码", "输入手机号", "手机号", "邮箱", "用户", "点击进入"}
 	}
 	seen := make(map[string]struct{}, len(keywords))
 	out := make([]string, 0, 8)
@@ -349,7 +506,7 @@ func isLoginPage(gameID string, points []TextPoint) bool {
 func isLoginPageByStrategy(strategy loginStrategy, points []TextPoint) bool {
 	switch strategy {
 	case loginStrategyStarRail:
-		hasPhoneInput := hasAnyKeyword(points, []string{"输入手机号/邮箱", "输入手机号", "手机号/邮箱", "输入账号", "手机号", "邮箱"})
+		hasPhoneInput := hasAnyKeyword(points, []string{"输入手机号邮箱", "输入手机号", "手机号邮箱", "输入账号", "手机号", "邮箱"})
 		hasPwdInput := hasAnyKeyword(points, []string{"输入密码", "密码"})
 		hasEnter := hasAnyKeyword(points, []string{"进入游戏", "登录", "开始游戏"})
 		return hasPhoneInput && hasPwdInput && hasEnter
@@ -419,24 +576,6 @@ func buildOCRSnapshot(points []TextPoint, maxItems int) string {
 		items = append(items, fmt.Sprintf("[%d] %q @(%d,%d)", i+1, p.Text, p.X, p.Y))
 	}
 	return strings.Join(items, "\n")
-}
-
-func isConfirmedImageA(points []TextPoint, windowHeight int) bool {
-	bottomThreshold := (windowHeight / 8) * 7
-	hasTargetWord := false
-	hasInterference := false
-
-	for _, p := range points {
-		if p.Y > bottomThreshold {
-			txt := p.Text
-			if containsKeywordSmart(txt, "进入游戏") || containsKeywordSmart(txt, "点击进入") || containsKeywordSmart(txt, "登录") {
-				hasTargetWord = true
-			} else if containsChinese(txt) {
-				hasInterference = true
-			}
-		}
-	}
-	return hasTargetWord && !hasInterference
 }
 
 func finalizeAccountStorage(gameID, username string) error {
@@ -583,7 +722,6 @@ func clickSecondBlackAgreement(hwnd win.HWND, frame *image.RGBA, points []TextPo
 		}
 	}
 
-	// 优先：点击“不同意”后面紧跟的“同意”。
 	for i := 0; i < len(hits)-1; i++ {
 		if !containsKeywordStrict(hits[i].Text, "不同意") {
 			continue
@@ -597,7 +735,6 @@ func clickSecondBlackAgreement(hwnd win.HWND, frame *image.RGBA, points []TextPo
 		}
 	}
 
-	// 回退1：同一行里，点“不同意”右侧最近的纯“同意”。
 	for _, n := range notAgree {
 		bestIdx := -1
 		bestDx := 1 << 30
@@ -624,7 +761,6 @@ func clickSecondBlackAgreement(hwnd win.HWND, frame *image.RGBA, points []TextPo
 		}
 	}
 
-	// 回退2：OCR 已识别到同意时，兜底点击最后一个纯“同意”。
 	if len(pureAgree) > 0 {
 		target := pureAgree[len(pureAgree)-1]
 		fmt.Printf("[agreement] fallback click last pure '同意': %q @(%d,%d)\n", target.Text, target.X, target.Y)
@@ -637,175 +773,201 @@ func clickSecondBlackAgreement(hwnd win.HWND, frame *image.RGBA, points []TextPo
 	return false
 }
 
-func isBlackFontAgreementTarget(img *image.RGBA, p TextPoint, loginBg [3]float64) bool {
-	if !containsKeywordSmart(p.Text, "同意") {
-		return false
+func isDirectEnterScreen(gameID string, points []TextPoint, frame image.Image, windowWidth, windowHeight int) bool {
+	if gameID == "StarRailCN" {
+		return isStarRailSuccessFeature(points, frame, windowWidth, windowHeight)
 	}
 
-	// 黑字判定：文字中心亮度需要足够低。
-	fontLum := sampleLuminance(img, p.X, p.Y, 2)
-	if fontLum > 90 {
-		return false
-	}
-
-	// 按钮底色判定：文字外围（上下左右及四角）20px 左右区域颜色应接近。
-	samples := agreementBgSamples(img, p)
-	if len(samples) < 4 {
-		return false
-	}
-	bg := meanRGB(samples)
-	if maxColorDistance(samples, bg) > 28 {
-		return false
-	}
-
-	// 与登录框背景要有明显差异，过滤掉普通文本“同意”。
-	if colorDistance(bg, loginBg) < 42 {
-		return false
-	}
-	return true
-}
-
-func agreementBgSamples(img *image.RGBA, p TextPoint) [][3]float64 {
-	w := p.Width
-	h := p.Height
-	if w <= 0 {
-		w = 36
-	}
-	if h <= 0 {
-		h = 18
-	}
-	xPad := w/2 + 10
-	yPad := h/2 + 10
-	pts := [][2]int{
-		{p.X - xPad, p.Y}, {p.X + xPad, p.Y},
-		{p.X, p.Y - yPad}, {p.X, p.Y + yPad},
-		{p.X - xPad, p.Y - yPad}, {p.X + xPad, p.Y - yPad},
-		{p.X - xPad, p.Y + yPad}, {p.X + xPad, p.Y + yPad},
-	}
-
-	out := make([][3]float64, 0, len(pts))
-	for _, pt := range pts {
-		if rgb, ok := sampleRGB(img, pt[0], pt[1], 1); ok {
-			out = append(out, rgb)
-		}
-	}
-	return out
-}
-
-func estimateLoginBgColor(img *image.RGBA) [3]float64 {
-	b := img.Bounds()
-	cx := (b.Min.X + b.Max.X) / 2
-	cy := (b.Min.Y + b.Max.Y) / 2
-	offsets := [][2]int{{0, 0}, {-80, 0}, {80, 0}, {0, -50}, {0, 50}, {-80, 50}, {80, 50}}
-
-	samples := make([][3]float64, 0, len(offsets))
-	for _, off := range offsets {
-		if rgb, ok := sampleRGB(img, cx+off[0], cy+off[1], 2); ok {
-			samples = append(samples, rgb)
-		}
-	}
-	if len(samples) == 0 {
-		return [3]float64{128, 128, 128}
-	}
-	return meanRGB(samples)
-}
-
-func sampleLuminance(img *image.RGBA, x, y, radius int) float64 {
-	rgb, ok := sampleRGB(img, x, y, radius)
-	if !ok {
-		return 255
-	}
-	return 0.299*rgb[0] + 0.587*rgb[1] + 0.114*rgb[2]
-}
-
-func sampleRGB(img *image.RGBA, x, y, radius int) ([3]float64, bool) {
-	b := img.Bounds()
-	if x < b.Min.X || x >= b.Max.X || y < b.Min.Y || y >= b.Max.Y {
-		return [3]float64{}, false
-	}
-	if radius < 0 {
-		radius = 0
-	}
-
-	var sumR, sumG, sumB float64
-	var n float64
-	for yy := y - radius; yy <= y+radius; yy++ {
-		if yy < b.Min.Y || yy >= b.Max.Y {
-			continue
-		}
-		for xx := x - radius; xx <= x+radius; xx++ {
-			if xx < b.Min.X || xx >= b.Max.X {
-				continue
-			}
-			c := img.RGBAAt(xx, yy)
-			sumR += float64(c.R)
-			sumG += float64(c.G)
-			sumB += float64(c.B)
-			n++
-		}
-	}
-	if n == 0 {
-		return [3]float64{}, false
-	}
-	return [3]float64{sumR / n, sumG / n, sumB / n}, true
-}
-
-func meanRGB(list [][3]float64) [3]float64 {
-	if len(list) == 0 {
-		return [3]float64{}
-	}
-	var r, g, b float64
-	for _, c := range list {
-		r += c[0]
-		g += c[1]
-		b += c[2]
-	}
-	n := float64(len(list))
-	return [3]float64{r / n, g / n, b / n}
-}
-
-func maxColorDistance(list [][3]float64, mean [3]float64) float64 {
-	var maxD float64
-	for _, c := range list {
-		d := colorDistance(c, mean)
-		if d > maxD {
-			maxD = d
-		}
-	}
-	return maxD
-}
-
-func colorDistance(a, b [3]float64) float64 {
-	dr := a[0] - b[0]
-	dg := a[1] - b[1]
-	db := a[2] - b[2]
-	if dr < 0 {
-		dr = -dr
-	}
-	if dg < 0 {
-		dg = -dg
-	}
-	if db < 0 {
-		db = -db
-	}
-	return dr + dg + db
-}
-
-func isConfirmedAfterAgreement(points []TextPoint, windowHeight int, st *loginRuntimeState) bool {
-	if st == nil || !st.agreementClicked {
-		return false
-	}
-	if time.Since(st.agreementClickedAt) < time.Second {
-		return false
-	}
-
-	yMin := windowHeight / 2
+	yMin := (windowHeight * 4) / 5
 	for _, p := range points {
 		if p.Y < yMin {
 			continue
 		}
 		if containsKeywordSmart(p.Text, "点击进入") || containsKeywordSmart(p.Text, "开始游戏") {
 			return true
+		}
+	}
+	return false
+}
+
+func isStarRailSuccessFeature(points []TextPoint, frame image.Image, windowWidth, windowHeight int) bool {
+	if windowWidth <= 0 || windowHeight <= 0 {
+		return false
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	resultCh := make(chan bool, 2)
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		matched := isStarRailSuccessByText(points, windowWidth, windowHeight)
+		select {
+		case resultCh <- matched:
+		case <-ctx.Done():
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		matched := isStarRailSuccessByImage(ctx, frame, windowWidth, windowHeight)
+		select {
+		case resultCh <- matched:
+		case <-ctx.Done():
+		}
+	}()
+
+	matched := false
+	for i := 0; i < 2; i++ {
+		r := <-resultCh
+		if r {
+			matched = true
+			cancel()
+			break
+		}
+	}
+	wg.Wait()
+	return matched
+}
+
+func isStarRailSuccessByText(points []TextPoint, windowWidth, windowHeight int) bool {
+	yBottom := (windowHeight * 4) / 5
+	xRight := (windowWidth * 9) / 10
+
+	for _, p := range points {
+		if p.Y >= yBottom && containsKeywordSmart(p.Text, "点击进入") {
+			fmt.Println("[starrail-success] matched by OCR keyword: 点击进入")
+			return true
+		}
+		if p.Y >= yBottom && containsKeywordSmart(p.Text, "开始游戏") {
+			fmt.Println("[starrail-success] matched by OCR keyword: 开始游戏")
+			return true
+		}
+		if p.X >= xRight && containsKeywordSmart(p.Text, "登出") {
+			fmt.Println("[starrail-success] matched by OCR keyword: 登出")
+			return true
+		}
+	}
+	return false
+}
+
+func isStarRailSuccessByImage(ctx context.Context, frame image.Image, windowWidth, windowHeight int) bool {
+	if frame == nil || windowWidth <= 0 || windowHeight <= 0 {
+		return false
+	}
+	if matchStarRailClickEnterByImage(ctx, frame, windowWidth, windowHeight) {
+		fmt.Println("[starrail-success] matched by image template: 点击进入")
+		return true
+	}
+	if matchStarRailLogoutByImage(ctx, frame, windowWidth, windowHeight) {
+		fmt.Println("[starrail-success] matched by image template: 登出")
+		return true
+	}
+	return false
+}
+
+func matchStarRailClickEnterByImage(ctx context.Context, img image.Image, w, h int) bool {
+	yStart := (h * 4) / 5
+	if yStart >= h {
+		return false
+	}
+
+	patchW := maxInt(96, w/8)
+	patchH := maxInt(28, h/24)
+	stepX := maxInt(10, patchW/3)
+	stepY := maxInt(8, patchH/2)
+
+	for y := yStart; y+patchH <= h; y += stepY {
+		select {
+		case <-ctx.Done():
+			return false
+		default:
+		}
+		for x := 0; x+patchW <= w; x += stepX {
+			total, blueN, whiteN := 0, 0, 0
+			for yy := y; yy < y+patchH; yy += 3 {
+				for xx := x; xx < x+patchW; xx += 3 {
+					r16, g16, b16, _ := img.At(xx, yy).RGBA()
+					r := int(r16 >> 8)
+					g := int(g16 >> 8)
+					bl := int(b16 >> 8)
+					lum := (299*r + 587*g + 114*bl) / 1000
+					total++
+					if bl >= g+10 && g >= r-12 && bl >= 70 {
+						blueN++
+					}
+					if lum >= 185 && absInt(r-g) <= 35 && absInt(r-bl) <= 35 && absInt(g-bl) <= 35 {
+						whiteN++
+					}
+				}
+			}
+			if total == 0 {
+				continue
+			}
+			blueRatio := float64(blueN) / float64(total)
+			whiteRatio := float64(whiteN) / float64(total)
+			if blueRatio >= 0.20 && whiteRatio >= 0.04 && whiteRatio <= 0.35 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func matchStarRailLogoutByImage(ctx context.Context, img image.Image, w, h int) bool {
+	xStart := (w * 9) / 10
+	if xStart >= w {
+		return false
+	}
+
+	patchW := maxInt(42, w/28)
+	patchH := maxInt(72, h/13)
+	stepX := maxInt(4, patchW/4)
+	stepY := maxInt(10, patchH/4)
+
+	for x := xStart; x+patchW <= w; x += stepX {
+		select {
+		case <-ctx.Done():
+			return false
+		default:
+		}
+		for y := 0; y+patchH <= h; y += stepY {
+			total, purpleN, whiteN := 0, 0, 0
+			topWhite, bottomWhite := 0, 0
+			for yy := y; yy < y+patchH; yy += 2 {
+				for xx := x; xx < x+patchW; xx += 2 {
+					r16, g16, b16, _ := img.At(xx, yy).RGBA()
+					r := int(r16 >> 8)
+					g := int(g16 >> 8)
+					bl := int(b16 >> 8)
+					lum := (299*r + 587*g + 114*bl) / 1000
+					total++
+					if bl >= r+8 && bl >= g+8 && bl >= 70 {
+						purpleN++
+					}
+					if lum >= 175 && absInt(r-g) <= 40 && absInt(r-bl) <= 40 && absInt(g-bl) <= 40 {
+						whiteN++
+						if yy < y+patchH/2 {
+							topWhite++
+						} else {
+							bottomWhite++
+						}
+					}
+				}
+			}
+			if total == 0 {
+				continue
+			}
+			purpleRatio := float64(purpleN) / float64(total)
+			whiteRatio := float64(whiteN) / float64(total)
+			topWhiteRatio := float64(topWhite) / float64(total)
+			bottomWhiteRatio := float64(bottomWhite) / float64(total)
+			if purpleRatio >= 0.20 && whiteRatio >= 0.08 && topWhiteRatio >= 0.02 && bottomWhiteRatio >= 0.01 {
+				return true
+			}
 		}
 	}
 	return false
@@ -881,7 +1043,7 @@ func normalizeOCRText(s string) string {
 	n := strings.ToLower(strings.TrimSpace(s))
 	replacer := strings.NewReplacer(
 		" ", "", "\t", "", "\n", "", "\r", "",
-		"。", "", "，", "", "：", "", "；", "", "！", "", "？", "",
+		"。", "", "，", "", ",", "", ".", "", "：", "", ":", "",
 		"(", "", ")", "", "（", "", "）", "", "[", "", "]", "",
 	)
 	n = replacer.Replace(n)
@@ -927,13 +1089,11 @@ func minInt(a, b int) int {
 	return b
 }
 
-func containsChinese(s string) bool {
-	for _, r := range s {
-		if r >= 0x4E00 && r <= 0x9FA5 {
-			return true
-		}
+func maxInt(a, b int) int {
+	if a > b {
+		return a
 	}
-	return false
+	return b
 }
 
 func randClick(x, y, rx, ry int) {

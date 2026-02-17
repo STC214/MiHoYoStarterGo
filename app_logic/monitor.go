@@ -3,10 +3,11 @@ package app_logic
 import (
 	"MiHoYoStarterGo/logic"
 	"context"
+	"sync/atomic"
 )
 
 // RunMonitor 负责具体的业务流：解密并启动自动化监控流程
-func RunMonitor(ctx context.Context, acc logic.Account, pause, cancel *bool) {
+func RunMonitor(ctx context.Context, acc logic.Account, pause, cancel *atomic.Bool, directEnterFastPath bool) {
 	// 1. 从底层 logic 获取解密後的明文密码
 	pwd, err := logic.DecryptString(acc.Password)
 	if err != nil {
@@ -22,6 +23,7 @@ func RunMonitor(ctx context.Context, acc logic.Account, pause, cancel *bool) {
 		acc.Username,
 		pwd,
 		acc.IsFirstLogin,
+		directEnterFastPath,
 		pause,
 		cancel,
 	)

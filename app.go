@@ -5,22 +5,20 @@ import (
 	"MiHoYoStarterGo/logic"
 	"context"
 	"sync"
+	"sync/atomic"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type App struct {
 	ctx          context.Context
-	IsPaused     bool
-	ShouldCancel bool
+	IsPaused     atomic.Bool
+	ShouldCancel atomic.Bool
 	trayOnce     sync.Once
 }
 
 func NewApp() *App {
-	return &App{
-		IsPaused:     false,
-		ShouldCancel: false,
-	}
+	return &App{}
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -122,9 +120,9 @@ func (a *App) StartGame(gameID string) string {
 }
 
 func (a *App) StartMonitor(acc logic.Account) {
-	a.IsPaused = false
-	a.ShouldCancel = false
-	app_logic.RunMonitor(a.ctx, acc, &a.IsPaused, &a.ShouldCancel)
+	a.IsPaused.Store(false)
+	a.ShouldCancel.Store(false)
+	app_logic.RunMonitor(a.ctx, acc, &a.IsPaused, &a.ShouldCancel, false)
 }
 
 func (a *App) ExecuteLoginAction(acc logic.Account, action string) string {
@@ -132,15 +130,15 @@ func (a *App) ExecuteLoginAction(acc logic.Account, action string) string {
 }
 
 func (a *App) StopMonitor() {
-	a.ShouldCancel = true
+	a.ShouldCancel.Store(true)
 }
 
 func (a *App) TogglePauseMonitor() {
-	a.IsPaused = !a.IsPaused
+	a.IsPaused.Store(!a.IsPaused.Load())
 }
 
 func (a *App) GetMonitorStatus() string {
-	if a.IsPaused {
+	if a.IsPaused.Load() {
 		return "PAUSED"
 	}
 	return "RUNNING"

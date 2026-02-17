@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -18,9 +19,9 @@ const (
 )
 
 // ExecuteLoginAction handles all account-switch/login branches requested by UI.
-func ExecuteLoginAction(ctx context.Context, acc logic.Account, action string, pause, cancel *bool) string {
-	*pause = false
-	*cancel = false
+func ExecuteLoginAction(ctx context.Context, acc logic.Account, action string, pause, cancel *atomic.Bool) string {
+	pause.Store(false)
+	cancel.Store(false)
 
 	switch action {
 	case ActionCancel:
@@ -42,14 +43,14 @@ func ExecuteLoginAction(ctx context.Context, acc logic.Account, action string, p
 		if res := StartGame(acc.GameID); res != "SUCCESS" {
 			return res
 		}
-		RunMonitor(ctx, acc, pause, cancel)
+		RunMonitor(ctx, acc, pause, cancel, false)
 		return "STARTED"
 
 	case ActionRunningManual:
 		if !logic.IsGameRunning(acc.GameID) {
 			return "GAME_NOT_RUNNING"
 		}
-		RunMonitor(ctx, acc, pause, cancel)
+		RunMonitor(ctx, acc, pause, cancel, false)
 		return "STARTED"
 
 	case ActionStoppedAutoStart:
@@ -62,23 +63,28 @@ func ExecuteLoginAction(ctx context.Context, acc logic.Account, action string, p
 		if res := StartGame(acc.GameID); res != "SUCCESS" {
 			return res
 		}
-		RunMonitor(ctx, acc, pause, cancel)
+		RunMonitor(ctx, acc, pause, cancel, false)
 		return "STARTED"
 
 	case ActionStoppedManualWait:
 		if logic.IsGameRunning(acc.GameID) {
 			return "GAME_RUNNING"
 		}
+		directEnterFastPath := hasSavedEnvForManualSwitch(acc)
 		if err := patchEnvIfNeeded(acc); err != nil {
 			return fmt.Sprintf("PATCH_FAILED:%v", err)
 		}
 		// Monitor waits for process existence (300ms loop) and starts OCR flow once game starts.
-		RunMonitor(ctx, acc, pause, cancel)
+		RunMonitor(ctx, acc, pause, cancel, directEnterFastPath)
 		return "STARTED"
 
 	default:
 		return "INVALID_ACTION"
 	}
+}
+
+func hasSavedEnvForManualSwitch(acc logic.Account) bool {
+	return strings.TrimSpace(acc.Token) != "" && strings.TrimSpace(acc.DeviceFingerprint) != ""
 }
 
 func waitProcessStopped(gameID string, timeout time.Duration) bool {

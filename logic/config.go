@@ -10,10 +10,52 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 )
 
 const configFileName = "config.json"
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+func appConfigPath() (exePath string, cwdPath string) {
+	cwdPath = configFileName
+	exePath = configFileName
+
+	exe, err := os.Executable()
+	if err != nil {
+		return exePath, cwdPath
+	}
+
+	if realExe, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = realExe
+	}
+
+	exePath = filepath.Join(filepath.Dir(exe), configFileName)
+	return exePath, cwdPath
+}
+
+func readConfigPath() string {
+	exePath, cwdPath := appConfigPath()
+	if fileExists(exePath) {
+		return exePath
+	}
+	if fileExists(cwdPath) {
+		return cwdPath
+	}
+	return exePath
+}
+
+func writeConfigPath() string {
+	exePath, cwdPath := appConfigPath()
+	if fileExists(exePath) || !fileExists(cwdPath) {
+		return exePath
+	}
+	return cwdPath
+}
 
 type Account struct {
 	ID                string `json:"id"`
@@ -55,7 +97,7 @@ type ZZZPointProfile struct {
 
 func LoadConfig() (*ConfigData, error) {
 	var config ConfigData
-	file, err := os.ReadFile(configFileName)
+	file, err := os.ReadFile(readConfigPath())
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &ConfigData{
@@ -91,15 +133,29 @@ func SaveConfig(config *ConfigData) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(configFileName, data, 0644)
+	target := writeConfigPath()
+	if err := os.WriteFile(target, data, 0644); err == nil {
+		return nil
+	}
+
+	_, cwdPath := appConfigPath()
+	if target != cwdPath {
+		return os.WriteFile(cwdPath, data, 0644)
+	}
+	return os.WriteFile(target, data, 0644)
 }
 
 func ExportPlaintextBackup(config *ConfigData) (string, error) {
 	backupName := fmt.Sprintf("backup_%d.json", time.Now().Unix())
+	target := filepath.Join(filepath.Dir(writeConfigPath()), backupName)
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return "", err
 	}
+	if err := os.WriteFile(target, data, 0644); err == nil {
+		return backupName, nil
+	}
+
 	if err := os.WriteFile(backupName, data, 0644); err != nil {
 		return "", err
 	}
