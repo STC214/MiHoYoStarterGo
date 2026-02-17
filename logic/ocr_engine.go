@@ -1,12 +1,13 @@
 package logic
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall" // 新增导入
+	"syscall"
 )
 
 type OCRRawResponse struct {
@@ -28,14 +29,16 @@ type TextPoint struct {
 }
 
 func RecognizeWithPos(imagePath string) ([]TextPoint, error) {
+	return RecognizeWithPosContext(context.Background(), imagePath)
+}
+
+func RecognizeWithPosContext(ctx context.Context, imagePath string) ([]TextPoint, error) {
 	exeRelPath := "./bin/PaddleOCR-json_v1.4.1/PaddleOCR-json.exe"
 	absExe, _ := filepath.Abs(exeRelPath)
 	absImg, _ := filepath.Abs(imagePath)
 
-	cmd := exec.Command(absExe, "--image_path="+absImg)
+	cmd := exec.CommandContext(ctx, absExe, "--image_path="+absImg)
 	cmd.Dir = filepath.Dir(absExe)
-
-	// --- 核心修复：隐藏窗口属性 ---
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		HideWindow:    true,
 		CreationFlags: 0x08000000, // CREATE_NO_WINDOW
@@ -57,8 +60,11 @@ func RecognizeWithPos(imagePath string) ([]TextPoint, error) {
 		return nil, err
 	}
 
-	var res []TextPoint
+	res := make([]TextPoint, 0, len(raw.Data))
 	for _, d := range raw.Data {
+		if len(d.Box) < 4 {
+			continue
+		}
 		res = append(res, TextPoint{
 			Text:   d.Text,
 			X:      (d.Box[0][0] + d.Box[1][0]) / 2,

@@ -37,7 +37,6 @@ func GetWindowHandleByProcessName(exeName string) win.HWND {
 			break
 		}
 	}
-
 	if targetPid == 0 {
 		return 0
 	}
@@ -64,12 +63,12 @@ func GetWindowHandleByGameID(gameID string) win.HWND {
 	if gameID == "StarRailCN" {
 		return GetWindowHandleByProcessName("StarRail.exe")
 	}
+	if gameID == "ZZZCN" {
+		return GetWindowHandleByProcessName("ZenlessZoneZero.exe")
+	}
 
 	title := "原神"
-	switch gameID {
-	case "ZZZCN":
-		title = "绝区零"
-	case "GenshinOS":
+	if gameID == "GenshinOS" {
 		title = "Genshin Impact"
 	}
 	return win.FindWindow(nil, syscall.StringToUTF16Ptr(title))
@@ -118,7 +117,6 @@ func CaptureWindowByHandle(hwnd win.HWND) (*image.RGBA, error) {
 	bi.BmiHeader.BiCompression = win.BI_RGB
 
 	win.GetDIBits(hdcScreen, hBitmap, 0, uint32(height), (*byte)(unsafe.Pointer(&img.Pix[0])), &bi, win.DIB_RGB_COLORS)
-
 	for i := 3; i < len(img.Pix); i += 4 {
 		img.Pix[i] = 255
 	}

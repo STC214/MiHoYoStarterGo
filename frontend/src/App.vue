@@ -55,12 +55,15 @@
       :messageText="messageText"
       :pauseStatus="pauseStatus"
       :runContext="runContext"
+      :zzzCalibrate="zzzCalibrate"
       :games="games"
       :gamePaths="settings.game_paths"
       @close="closeModal"
       @confirmAdd="handleAdd"
       @confirmEdit="handleEdit"
       @runAction="handleRunAction"
+      @openZZZCalibrate="openZZZCalibrate"
+      @startZZZCalibrate="handleCalibrateZZZ"
       @captureDebug="handleCaptureDebug"
       @togglePause="togglePause"
       @stopMonitor="handleStopMonitor"
@@ -96,7 +99,8 @@ import {
   IsGameRunning,
   StopMonitor,
   TogglePauseMonitor,
-  GetMonitorStatus
+  GetMonitorStatus,
+  CalibrateZZZPoints
 } from '../wailsjs/go/main/App'
 import { EventsOn } from '../wailsjs/runtime'
 
@@ -117,7 +121,18 @@ const pendingDeleteAccount = ref(null)
 const editingAccountId = ref('')
 const runContext = reactive({
   isRunning: false,
-  alias: ''
+  alias: '',
+  gameID: ''
+})
+const zzzCalibrate = reactive({
+  running: false,
+  phase: 'idle',
+  step: 0,
+  total: 4,
+  label: '',
+  text: '',
+  x: 0,
+  y: 0
 })
 const dragState = reactive({
   sourceId: '',
@@ -153,6 +168,18 @@ onMounted(async () => {
     pauseStatus.value = 'RUNNING'
     loadAll()
   })
+
+  EventsOn('zzz_calibration_progress', payload => {
+    zzzCalibrate.phase = payload?.phase || 'idle'
+    zzzCalibrate.step = Number(payload?.step || 0)
+    zzzCalibrate.total = Number(payload?.total || 4)
+    zzzCalibrate.label = payload?.label || ''
+    zzzCalibrate.text = payload?.text || ''
+    zzzCalibrate.x = Number(payload?.x || 0)
+    zzzCalibrate.y = Number(payload?.y || 0)
+    modalType.value = 'zzzCalibrate'
+  })
+
 })
 
 const loadAll = async () => {
@@ -218,6 +245,7 @@ const handleEdit = async () => {
 const handleRunRequest = async acc => {
   selectedAccount.value = acc
   runContext.alias = acc.alias
+  runContext.gameID = acc.game_id
   runContext.isRunning = await IsGameRunning(acc.game_id)
   modalType.value = 'runAction'
 }
@@ -225,6 +253,10 @@ const handleRunRequest = async acc => {
 const handleRunAction = async action => {
   if (!selectedAccount.value || action === 'cancel') {
     modalType.value = ''
+    return
+  }
+  if (action === 'zzz_calibrate') {
+    openZZZCalibrate()
     return
   }
 
@@ -257,6 +289,48 @@ const handleRunAction = async action => {
   statusTip.value = '流程已启动，正在等待识别登录界面...'
   monitorActive.value = true
   modalType.value = 'status'
+}
+
+const openZZZCalibrate = () => {
+  zzzCalibrate.running = false
+  zzzCalibrate.phase = 'idle'
+  zzzCalibrate.step = 0
+  zzzCalibrate.total = 4
+  zzzCalibrate.label = ''
+  zzzCalibrate.text = '点击开始记录后，将按步骤倒计时自动读取鼠标位置。'
+  zzzCalibrate.x = 0
+  zzzCalibrate.y = 0
+  modalType.value = 'zzzCalibrate'
+}
+
+const handleCalibrateZZZ = async () => {
+  zzzCalibrate.running = true
+  zzzCalibrate.text = '正在初始化绝区零坐标标定...'
+  const res = await CalibrateZZZPoints()
+  zzzCalibrate.running = false
+
+  if (res === 'SUCCESS') {
+    zzzCalibrate.phase = 'done'
+    zzzCalibrate.text = '绝区零坐标标定完成，后续登录将优先使用坐标流程。'
+    return
+  }
+  if (res === 'ZZZ_WINDOW_NOT_FOUND') {
+    showMessage('未检测到绝区零窗口，请先打开并切到登录界面。')
+    return
+  }
+  if (res === 'CAPTURE_TIMEOUT') {
+    showMessage('坐标采集超时，请重试。')
+    return
+  }
+  if (res === 'INVALID_PROFILE') {
+    showMessage('标定结果无效，请重试。')
+    return
+  }
+  if (res === 'SAVE_FAILED') {
+    showMessage('坐标保存失败，请检查配置文件权限。')
+    return
+  }
+  showMessage('标定失败：' + res)
 }
 
 const togglePause = async () => {

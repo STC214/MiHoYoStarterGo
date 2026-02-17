@@ -4,6 +4,8 @@ import {logic} from '../models';
 
 export function AddAccount(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
 
+export function CalibrateZZZPoints():Promise<string>;
+
 export function CaptureDebugWindow(arg1:string):Promise<string>;
 
 export function DeleteAccount(arg1:string):Promise<string>;

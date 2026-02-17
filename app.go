@@ -59,7 +59,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 }
 
-// --- 闀ㄦ澘顣ㄩ懜鍥ц祴閾忕喖鍊ф潛?---
+// Account operations
 
 func (a *App) PrepareAccountEnvironment(acc logic.Account) string {
 	return app_logic.HandleEnvPatch(acc)
@@ -85,7 +85,7 @@ func (a *App) SaveAccountsOrder(ids []string) string {
 	return app_logic.SaveAccountsOrder(ids)
 }
 
-// --- 鐟奉厾鐤?---
+// Account operations
 
 func (a *App) GetSettings() *logic.ConfigData {
 	return app_logic.GetSettings()
@@ -111,7 +111,7 @@ func (a *App) CaptureDebugWindow(gameID string) string {
 	return app_logic.CaptureDebugWindow(gameID)
 }
 
-// --- 閻╋絾甯﹂懜鍥х吋鐞?---
+// Account operations
 
 func (a *App) IsGameRunning(gameID string) bool {
 	return logic.IsGameRunning(gameID)
@@ -144,4 +144,8 @@ func (a *App) GetMonitorStatus() string {
 		return "PAUSED"
 	}
 	return "RUNNING"
+}
+
+func (a *App) CalibrateZZZPoints() string {
+	return app_logic.CalibrateZZZPoints(a.ctx)
 }

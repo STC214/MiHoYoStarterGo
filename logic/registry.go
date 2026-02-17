@@ -9,7 +9,7 @@ import (
 
 type GameRegConfig struct {
 	Path   string
-	Prefix string // 改用前缀匹配，增加兼容性
+	Prefix string
 }
 
 var GamePaths = map[string]GameRegConfig{
@@ -31,7 +31,6 @@ var GamePaths = map[string]GameRegConfig{
 	},
 }
 
-// findActualKeyName 自动在注册表路径下寻找匹配前缀的真实键名
 func findActualKeyName(k registry.Key, prefix string) (string, error) {
 	names, err := k.ReadValueNames(0)
 	if err != nil {
@@ -42,22 +41,21 @@ func findActualKeyName(k registry.Key, prefix string) (string, error) {
 			return name, nil
 		}
 	}
-	return "", fmt.Errorf("找不到以 %s 开头的注册表键", prefix)
+	return "", fmt.Errorf("cannot find registry value with prefix %s", prefix)
 }
 
 func ReadToken(gameID string) ([]byte, error) {
 	config, ok := GamePaths[gameID]
 	if !ok {
-		return nil, fmt.Errorf("未定义的游戏 ID: %s", gameID)
+		return nil, fmt.Errorf("unknown game id: %s", gameID)
 	}
 
 	k, err := registry.OpenKey(registry.CURRENT_USER, config.Path, registry.READ)
 	if err != nil {
-		return nil, fmt.Errorf("无法打开注册表路径: %v", err)
+		return nil, fmt.Errorf("cannot open registry key: %w", err)
 	}
 	defer k.Close()
 
-	// 动态获取键名，解决 h3123548890 可能变动的问题
 	actualKey, err := findActualKeyName(k, config.Prefix)
 	if err != nil {
 		return nil, err
@@ -65,7 +63,7 @@ func ReadToken(gameID string) ([]byte, error) {
 
 	val, _, err := k.GetBinaryValue(actualKey)
 	if err != nil {
-		return nil, fmt.Errorf("读取键值失败 (%s): %v", actualKey, err)
+		return nil, fmt.Errorf("cannot read binary value %s: %w", actualKey, err)
 	}
 	return val, nil
 }
@@ -73,12 +71,12 @@ func ReadToken(gameID string) ([]byte, error) {
 func WriteToken(gameID string, tokenBytes []byte) error {
 	config, ok := GamePaths[gameID]
 	if !ok {
-		return fmt.Errorf("未定义的游戏 ID: %s", gameID)
+		return fmt.Errorf("unknown game id: %s", gameID)
 	}
 
 	k, err := registry.OpenKey(registry.CURRENT_USER, config.Path, registry.SET_VALUE|registry.QUERY_VALUE)
 	if err != nil {
-		return fmt.Errorf("无法打开注册表路径进行写入: %v", err)
+		return fmt.Errorf("cannot open registry key for write: %w", err)
 	}
 	defer k.Close()
 

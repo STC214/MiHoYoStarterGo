@@ -72,6 +72,13 @@
         <p class="modal-desc">{{ runContext.isRunning ? '检测到目标游戏进程正在运行，请选择处理方式。' : '检测到目标游戏进程未运行，请选择处理方式。' }}</p>
 
         <div class="modal-actions full-width">
+          <button
+            v-if="runContext.gameID === 'ZZZCN'"
+            class="btn-zzz-calibrate"
+            @click="$emit('openZZZCalibrate')"
+          >
+            打开绝区零点位标定
+          </button>
           <template v-if="runContext.isRunning">
             <button class="btn-primary" @click="$emit('runAction', 'running_restart')">切换账号并自动重启</button>
             <button class="btn-warning" @click="$emit('runAction', 'running_manual')">手动切换到登录界面</button>
@@ -81,6 +88,48 @@
             <button class="btn-warning" @click="$emit('runAction', 'stopped_manual_wait')">手动启动游戏</button>
           </template>
           <button class="btn-danger" @click="$emit('runAction', 'cancel')">取消</button>
+        </div>
+      </div>
+
+      <div v-if="activeType === 'zzzCalibrate'" class="modal-content zzz-calibrate-modal">
+        <h3>绝区零点位标定</h3>
+        <p class="modal-desc">
+          仅用于绝区零。点击“开始记录”后，按提示将鼠标移动到目标位置，系统会倒计时自动读取坐标。
+        </p>
+        <div class="zzz-focus-tip">
+          <span class="zzz-focus-tag">当前应放置鼠标</span>
+          <strong>{{ currentStepText }}</strong>
+        </div>
+        <div class="zzz-step-grid">
+          <div
+            v-for="(stepName, idx) in zzzStepNames"
+            :key="stepName"
+            :class="[
+              'zzz-step-item',
+              zzzCalibrate.step === idx + 1 ? 'active' : '',
+              zzzCalibrate.step > idx + 1 ? 'done' : ''
+            ]"
+          >
+            <span class="step-index">步骤 {{ idx + 1 }}</span>
+            <span class="step-name">{{ stepName }}</span>
+          </div>
+        </div>
+        <div class="zzz-calibrate-panel">
+          <div class="zzz-calibrate-header">
+            <span>步骤：{{ zzzCalibrate.step }}/{{ zzzCalibrate.total }}</span>
+            <span class="phase-tag">{{ phaseText }}</span>
+          </div>
+          <p class="zzz-calibrate-text">{{ zzzCalibrate.text }}</p>
+          <p v-if="zzzCalibrate.label" class="zzz-calibrate-label">当前目标：{{ zzzCalibrate.label }}</p>
+          <p v-if="zzzCalibrate.phase === 'captured'" class="zzz-calibrate-point">
+            已记录坐标：X={{ zzzCalibrate.x }}, Y={{ zzzCalibrate.y }}
+          </p>
+        </div>
+        <div class="modal-actions">
+          <button @click="$emit('close')" :disabled="zzzCalibrate.running">关闭</button>
+          <button class="btn-primary" @click="$emit('startZZZCalibrate')" :disabled="zzzCalibrate.running">
+            {{ zzzCalibrate.running ? '记录中...' : '开始记录' }}
+          </button>
         </div>
       </div>
 
@@ -147,6 +196,8 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+
 const props = defineProps({
   isOpen: Boolean,
   activeType: String,
@@ -155,6 +206,7 @@ const props = defineProps({
   messageText: String,
   pauseStatus: String,
   runContext: Object,
+  zzzCalibrate: Object,
   games: Array,
   gamePaths: Object
 })
@@ -164,6 +216,8 @@ defineEmits([
   'confirmAdd',
   'confirmEdit',
   'runAction',
+  'openZZZCalibrate',
+  'startZZZCalibrate',
   'captureDebug',
   'togglePause',
   'stopMonitor',
@@ -178,6 +232,26 @@ defineEmits([
 const updateNewAcc = (key, value) => {
   props.newAcc[key] = value
 }
+
+const zzzStepNames = ['账号输入框', '密码输入框', '同意协议勾选点', '进入游戏点击点']
+
+const currentStepText = computed(() => {
+  const i = Number(props.zzzCalibrate?.step || 0) - 1
+  if (i >= 0 && i < zzzStepNames.length) {
+    return zzzStepNames[i]
+  }
+  return '等待开始记录'
+})
+
+const phaseText = computed(() => {
+  const p = props.zzzCalibrate?.phase || 'idle'
+  if (p === 'start') return '开始'
+  if (p === 'prompt') return '请放置鼠标'
+  if (p === 'captured') return '已记录'
+  if (p === 'done') return '完成'
+  if (p === 'error') return '错误'
+  return '待机'
+})
 </script>
 
 <style scoped>
@@ -248,4 +322,118 @@ const updateNewAcc = (key, value) => {
   border-radius: 4px;
   cursor: pointer;
 }
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-zzz-calibrate {
+  background: #2f5d42;
+  color: #e8fff1;
+  border: 1px solid #4f8a66;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.zzz-calibrate-modal {
+  border-color: #4f8a66;
+}
+
+.zzz-focus-tip {
+  margin: 12px 0;
+  padding: 12px;
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(79, 138, 102, 0.3), rgba(79, 138, 102, 0.08));
+  border: 1px solid rgba(79, 138, 102, 0.75);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.zzz-focus-tag {
+  font-size: 12px;
+  color: #b7e7c8;
+}
+
+.zzz-focus-tip strong {
+  font-size: 18px;
+  color: #e9fff2;
+  letter-spacing: 0.5px;
+}
+
+.zzz-step-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.zzz-step-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.zzz-step-item.active {
+  border-color: #7fdb9e;
+  background: rgba(127, 219, 158, 0.18);
+  box-shadow: 0 0 0 1px rgba(127, 219, 158, 0.25) inset;
+}
+
+.zzz-step-item.done {
+  border-color: #4f8a66;
+  background: rgba(79, 138, 102, 0.15);
+}
+
+.step-index {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.step-name {
+  font-size: 14px;
+}
+
+.zzz-calibrate-panel {
+  background: rgba(47, 93, 66, 0.12);
+  border: 1px solid rgba(79, 138, 102, 0.5);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.zzz-calibrate-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #bfe8cd;
+}
+
+.phase-tag {
+  background: rgba(79, 138, 102, 0.35);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.zzz-calibrate-text {
+  margin: 10px 0 0;
+}
+
+.zzz-calibrate-label,
+.zzz-calibrate-point {
+  margin: 8px 0 0;
+  color: #bfe8cd;
+  font-size: 13px;
+}
+
 </style>
