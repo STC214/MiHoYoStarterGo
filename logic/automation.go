@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"math/rand"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -31,6 +32,16 @@ type zzzRuntimeState struct {
 	lastClickAAt  time.Time
 	lastClickBAt  time.Time
 	lastHintNoCfg time.Time
+}
+
+type loginRuntimeState struct {
+	userFilled   bool
+	pwdFilled    bool
+	userFieldY   int
+	enterClicked bool
+
+	agreementClicked   bool
+	agreementClickedAt time.Time
 }
 
 func isDebugMode() bool {
@@ -57,6 +68,7 @@ func StartAutomationMonitor(ctx context.Context, gameID, user, pwd string, isFir
 		lastStatusTip := ""
 		lastMatchLog := ""
 		zzzState := &zzzRuntimeState{}
+		loginState := &loginRuntimeState{userFieldY: -1}
 
 		ticker := time.NewTicker(300 * time.Millisecond)
 		defer ticker.Stop()
@@ -132,14 +144,25 @@ func StartAutomationMonitor(ctx context.Context, gameID, user, pwd string, isFir
 				}
 			}
 
+			// 协议弹窗优先：识别到“不同意 + 同意”就立即尝试点击，不受账号密码流程状态影响。
+			if gameID != "ZZZCN" && !loginState.agreementClicked &&
+				hasAnyKeywordStrict(textPoints, []string{"不同意"}) &&
+				hasAnyKeywordStrict(textPoints, []string{"同意"}) {
+				if clickSecondBlackAgreement(hwnd, img, textPoints) {
+					loginState.agreementClicked = true
+					loginState.agreementClickedAt = time.Now()
+					continue
+				}
+			}
+
 			if isLoginPage(gameID, textPoints) {
 				runtime.EventsEmit(ctx, "monitor_status", "已识别登录界面，开始执行登录流程")
-				executeFullSequenceByHandle(hwnd, textPoints, user, pwd)
+				executeFullSequenceByHandle(hwnd, img, textPoints, user, pwd, loginState)
 			}
 
 			var rect win.RECT
 			win.GetWindowRect(hwnd, &rect)
-			if (gameID == "ZZZCN" && isZZZScreenC(textPoints, int(rect.Bottom-rect.Top))) || (gameID != "ZZZCN" && isConfirmedImageA(textPoints, int(rect.Bottom-rect.Top))) {
+			if (gameID == "ZZZCN" && isZZZScreenC(textPoints, int(rect.Bottom-rect.Top))) || (gameID != "ZZZCN" && isConfirmedAfterAgreement(textPoints, int(rect.Bottom-rect.Top), loginState)) {
 				fmt.Println("[success] login confirmed, writing account data back")
 				runtime.EventsEmit(ctx, "monitor_status", "已识别登录成功，正在写回账号数据...")
 				if err := finalizeAccountStorage(gameID, user); err != nil {
@@ -348,6 +371,17 @@ func hasAnyKeyword(points []TextPoint, keywords []string) bool {
 	return false
 }
 
+func hasAnyKeywordStrict(points []TextPoint, keywords []string) bool {
+	for _, p := range points {
+		for _, kw := range keywords {
+			if containsKeywordStrict(p.Text, kw) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func hasKeyword(points []TextPoint, keyword string) bool {
 	for _, p := range points {
 		if containsKeywordSmart(p.Text, keyword) {
@@ -435,44 +469,346 @@ func finalizeAccountStorage(gameID, username string) error {
 	return SaveConfig(cfg)
 }
 
-func executeFullSequenceByHandle(hwnd win.HWND, points []TextPoint, user, pwd string) {
+func executeFullSequenceByHandle(hwnd win.HWND, frame *image.RGBA, points []TextPoint, user, pwd string, st *loginRuntimeState) {
 	if hwnd == 0 {
 		return
 	}
+	if st == nil {
+		st = &loginRuntimeState{userFieldY: -1}
+	}
+
 	var rect win.RECT
 	win.GetWindowRect(hwnd, &rect)
 	left, top := int(rect.Left), int(rect.Top)
 
-	filledUser := false
-	filledPwd := false
-	userFieldY := -1
-
-	for _, p := range points {
-		if !filledUser && hasAnyKeyword([]TextPoint{p}, []string{"手机号", "邮箱", "输入手机号", "输入账号", "账号密码"}) {
+	if !st.userFilled {
+		for _, p := range points {
+			if !hasAnyKeyword([]TextPoint{p}, []string{"手机号", "邮箱", "输入手机号", "输入账号", "账号密码"}) {
+				continue
+			}
 			randClick(left+p.X, top+p.Y, 10, 2)
 			time.Sleep(260 * time.Millisecond)
 			typeAction(user)
-			userFieldY = p.Y
-			filledUser = true
+			st.userFieldY = p.Y
+			st.userFilled = true
 			time.Sleep(280 * time.Millisecond)
+			break
 		}
-		if !filledPwd && hasAnyKeyword([]TextPoint{p}, []string{"密码", "输入密码"}) && !hasAnyKeyword([]TextPoint{p}, []string{"忘记"}) {
-			if userFieldY >= 0 && absInt(p.Y-userFieldY) < 18 {
+	}
+
+	if !st.pwdFilled {
+		for _, p := range points {
+			if !hasAnyKeyword([]TextPoint{p}, []string{"密码", "输入密码"}) || hasAnyKeyword([]TextPoint{p}, []string{"忘记"}) {
+				continue
+			}
+			if st.userFieldY >= 0 && absInt(p.Y-st.userFieldY) < 18 {
 				continue
 			}
 			randClick(left+p.X, top+p.Y, 10, 2)
 			time.Sleep(260 * time.Millisecond)
 			typeAction(pwd)
-			filledPwd = true
+			st.pwdFilled = true
 			time.Sleep(260 * time.Millisecond)
+			break
 		}
 	}
 
-	for _, p := range points {
-		if (containsKeywordSmart(p.Text, "进入") || containsKeywordSmart(p.Text, "登录") || containsKeywordSmart(p.Text, "开始")) && len(p.Text) <= 16 {
-			randClick(left+p.X, top+p.Y+5, 15, 5)
+	if st.userFilled && st.pwdFilled && !st.enterClicked {
+		for _, p := range points {
+			if containsKeywordSmart(p.Text, "进入游戏") {
+				randClick(left+p.X, top+p.Y+5, 15, 5)
+				st.enterClicked = true
+				return
+			}
 		}
 	}
+
+	if st.userFilled && st.pwdFilled && !st.agreementClicked {
+		if clickSecondBlackAgreement(hwnd, frame, points) {
+			st.agreementClicked = true
+			st.agreementClickedAt = time.Now()
+		}
+	}
+}
+
+func clickSecondBlackAgreement(hwnd win.HWND, frame *image.RGBA, points []TextPoint) bool {
+	_ = frame
+
+	var rect win.RECT
+	win.GetWindowRect(hwnd, &rect)
+	left, top := int(rect.Left), int(rect.Top)
+
+	hasNotAgree := false
+	hasAgree := false
+	for _, p := range points {
+		if containsKeywordStrict(p.Text, "不同意") {
+			hasNotAgree = true
+		}
+		if containsKeywordStrict(p.Text, "同意") && !containsKeywordStrict(p.Text, "不同意") {
+			hasAgree = true
+		}
+	}
+	if !(hasNotAgree && hasAgree) {
+		fmt.Println("[agreement] strict gate not met: need both '不同意' and '同意' in same OCR frame")
+		return false
+	}
+
+	hits := make([]TextPoint, 0, 6)
+	for _, p := range points {
+		if containsKeywordSmart(p.Text, "同意") {
+			hits = append(hits, p)
+		}
+	}
+	if len(hits) < 1 {
+		fmt.Println("[agreement] no '同意' candidate in current OCR frame")
+		return false
+	}
+
+	sort.Slice(hits, func(i, j int) bool {
+		if hits[i].Y == hits[j].Y {
+			return hits[i].X < hits[j].X
+		}
+		return hits[i].Y < hits[j].Y
+	})
+
+	pureAgree := make([]TextPoint, 0, len(hits))
+	notAgree := make([]TextPoint, 0, 2)
+	for _, h := range hits {
+		if containsKeywordStrict(h.Text, "不同意") {
+			notAgree = append(notAgree, h)
+			continue
+		}
+		if containsKeywordStrict(h.Text, "同意") {
+			pureAgree = append(pureAgree, h)
+		}
+	}
+
+	// 优先：点击“不同意”后面紧跟的“同意”。
+	for i := 0; i < len(hits)-1; i++ {
+		if !containsKeywordStrict(hits[i].Text, "不同意") {
+			continue
+		}
+		next := hits[i+1]
+		if containsKeywordStrict(next.Text, "同意") && !containsKeywordStrict(next.Text, "不同意") {
+			fmt.Printf("[agreement] click next after '不同意': %q @(%d,%d)\n", next.Text, next.X, next.Y)
+			randClick(left+next.X, top+next.Y+4, 10, 4)
+			time.Sleep(1 * time.Second)
+			return true
+		}
+	}
+
+	// 回退1：同一行里，点“不同意”右侧最近的纯“同意”。
+	for _, n := range notAgree {
+		bestIdx := -1
+		bestDx := 1 << 30
+		for i, a := range pureAgree {
+			dy := absInt(a.Y - n.Y)
+			if dy > 36 {
+				continue
+			}
+			dx := a.X - n.X
+			if dx <= 0 {
+				continue
+			}
+			if dx < bestDx {
+				bestDx = dx
+				bestIdx = i
+			}
+		}
+		if bestIdx >= 0 {
+			target := pureAgree[bestIdx]
+			fmt.Printf("[agreement] click same-row right '同意': %q @(%d,%d)\n", target.Text, target.X, target.Y)
+			randClick(left+target.X, top+target.Y+4, 10, 4)
+			time.Sleep(1 * time.Second)
+			return true
+		}
+	}
+
+	// 回退2：OCR 已识别到同意时，兜底点击最后一个纯“同意”。
+	if len(pureAgree) > 0 {
+		target := pureAgree[len(pureAgree)-1]
+		fmt.Printf("[agreement] fallback click last pure '同意': %q @(%d,%d)\n", target.Text, target.X, target.Y)
+		randClick(left+target.X, top+target.Y+4, 10, 4)
+		time.Sleep(1 * time.Second)
+		return true
+	}
+
+	fmt.Println("[agreement] only '不同意' detected, skip click")
+	return false
+}
+
+func isBlackFontAgreementTarget(img *image.RGBA, p TextPoint, loginBg [3]float64) bool {
+	if !containsKeywordSmart(p.Text, "同意") {
+		return false
+	}
+
+	// 黑字判定：文字中心亮度需要足够低。
+	fontLum := sampleLuminance(img, p.X, p.Y, 2)
+	if fontLum > 90 {
+		return false
+	}
+
+	// 按钮底色判定：文字外围（上下左右及四角）20px 左右区域颜色应接近。
+	samples := agreementBgSamples(img, p)
+	if len(samples) < 4 {
+		return false
+	}
+	bg := meanRGB(samples)
+	if maxColorDistance(samples, bg) > 28 {
+		return false
+	}
+
+	// 与登录框背景要有明显差异，过滤掉普通文本“同意”。
+	if colorDistance(bg, loginBg) < 42 {
+		return false
+	}
+	return true
+}
+
+func agreementBgSamples(img *image.RGBA, p TextPoint) [][3]float64 {
+	w := p.Width
+	h := p.Height
+	if w <= 0 {
+		w = 36
+	}
+	if h <= 0 {
+		h = 18
+	}
+	xPad := w/2 + 10
+	yPad := h/2 + 10
+	pts := [][2]int{
+		{p.X - xPad, p.Y}, {p.X + xPad, p.Y},
+		{p.X, p.Y - yPad}, {p.X, p.Y + yPad},
+		{p.X - xPad, p.Y - yPad}, {p.X + xPad, p.Y - yPad},
+		{p.X - xPad, p.Y + yPad}, {p.X + xPad, p.Y + yPad},
+	}
+
+	out := make([][3]float64, 0, len(pts))
+	for _, pt := range pts {
+		if rgb, ok := sampleRGB(img, pt[0], pt[1], 1); ok {
+			out = append(out, rgb)
+		}
+	}
+	return out
+}
+
+func estimateLoginBgColor(img *image.RGBA) [3]float64 {
+	b := img.Bounds()
+	cx := (b.Min.X + b.Max.X) / 2
+	cy := (b.Min.Y + b.Max.Y) / 2
+	offsets := [][2]int{{0, 0}, {-80, 0}, {80, 0}, {0, -50}, {0, 50}, {-80, 50}, {80, 50}}
+
+	samples := make([][3]float64, 0, len(offsets))
+	for _, off := range offsets {
+		if rgb, ok := sampleRGB(img, cx+off[0], cy+off[1], 2); ok {
+			samples = append(samples, rgb)
+		}
+	}
+	if len(samples) == 0 {
+		return [3]float64{128, 128, 128}
+	}
+	return meanRGB(samples)
+}
+
+func sampleLuminance(img *image.RGBA, x, y, radius int) float64 {
+	rgb, ok := sampleRGB(img, x, y, radius)
+	if !ok {
+		return 255
+	}
+	return 0.299*rgb[0] + 0.587*rgb[1] + 0.114*rgb[2]
+}
+
+func sampleRGB(img *image.RGBA, x, y, radius int) ([3]float64, bool) {
+	b := img.Bounds()
+	if x < b.Min.X || x >= b.Max.X || y < b.Min.Y || y >= b.Max.Y {
+		return [3]float64{}, false
+	}
+	if radius < 0 {
+		radius = 0
+	}
+
+	var sumR, sumG, sumB float64
+	var n float64
+	for yy := y - radius; yy <= y+radius; yy++ {
+		if yy < b.Min.Y || yy >= b.Max.Y {
+			continue
+		}
+		for xx := x - radius; xx <= x+radius; xx++ {
+			if xx < b.Min.X || xx >= b.Max.X {
+				continue
+			}
+			c := img.RGBAAt(xx, yy)
+			sumR += float64(c.R)
+			sumG += float64(c.G)
+			sumB += float64(c.B)
+			n++
+		}
+	}
+	if n == 0 {
+		return [3]float64{}, false
+	}
+	return [3]float64{sumR / n, sumG / n, sumB / n}, true
+}
+
+func meanRGB(list [][3]float64) [3]float64 {
+	if len(list) == 0 {
+		return [3]float64{}
+	}
+	var r, g, b float64
+	for _, c := range list {
+		r += c[0]
+		g += c[1]
+		b += c[2]
+	}
+	n := float64(len(list))
+	return [3]float64{r / n, g / n, b / n}
+}
+
+func maxColorDistance(list [][3]float64, mean [3]float64) float64 {
+	var maxD float64
+	for _, c := range list {
+		d := colorDistance(c, mean)
+		if d > maxD {
+			maxD = d
+		}
+	}
+	return maxD
+}
+
+func colorDistance(a, b [3]float64) float64 {
+	dr := a[0] - b[0]
+	dg := a[1] - b[1]
+	db := a[2] - b[2]
+	if dr < 0 {
+		dr = -dr
+	}
+	if dg < 0 {
+		dg = -dg
+	}
+	if db < 0 {
+		db = -db
+	}
+	return dr + dg + db
+}
+
+func isConfirmedAfterAgreement(points []TextPoint, windowHeight int, st *loginRuntimeState) bool {
+	if st == nil || !st.agreementClicked {
+		return false
+	}
+	if time.Since(st.agreementClickedAt) < time.Second {
+		return false
+	}
+
+	yMin := windowHeight / 2
+	for _, p := range points {
+		if p.Y < yMin {
+			continue
+		}
+		if containsKeywordSmart(p.Text, "点击进入") || containsKeywordSmart(p.Text, "开始游戏") {
+			return true
+		}
+	}
+	return false
 }
 
 func containsKeywordSmart(text, keyword string) bool {
@@ -514,6 +850,15 @@ func containsKeywordSmart(text, keyword string) bool {
 		}
 	}
 	return false
+}
+
+func containsKeywordStrict(text, keyword string) bool {
+	nText := normalizeOCRText(text)
+	nKeyword := normalizeOCRText(keyword)
+	if nText == "" || nKeyword == "" {
+		return false
+	}
+	return strings.Contains(nText, nKeyword)
 }
 
 func fuzzyDistanceThreshold(keywordLen int) int {
