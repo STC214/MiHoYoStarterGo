@@ -1,4 +1,85 @@
-﻿# MiHoYoStarterGo
+# MiHoYo Starter Vision Core
+
+## 使用说明
+
+1. 以管理员身份启动程序。
+2. 先在“游戏路径”里设置对应游戏的 `.exe` 路径。
+3. 点击“添加账号”，填写备注、账号和密码并保存。
+4. 选择目标账号后，点击“切换并登录”，再按界面提示选择自动启动或手动启动。
+5. 在游戏内完成登录后，回到启动器点击“手动确认登录成功”。
+6. 回写成功后，账号卡片中的“最后登录成功”时间会更新。
+
+## 使用提示
+
+- 当前版本是最小登录流版本，只保留账号管理、游戏启动、登录确认和回写。
+- 画面对比、模板调试、截图和 OCR 相关流程已经移除。
+- 程序最小化会进入系统托盘，点击关闭会直接退出程序。
+- 发布包现在按“单 exe”方式提供；首次运行后，程序会在运行目录旁生成自己的数据目录。
+- 切换账号前，目标游戏进程必须未在运行。
+
+## 中文
+
+这是一个独立的 Wails 子项目，当前聚焦于最小可用登录流程：
+
+- 添加、编辑、删除、排序账号
+- 保存游戏路径
+- 自动或手动发起登录流程
+- 手动确认登录成功
+- 回写登录成功时间、注册表 token 与设备指纹
+
+## 日本語
+
+これは独立した Wails サブプロジェクトであり、現在は最小限のログインフローに特化しています。
+
+- アカウントの追加、編集、削除、並べ替え
+- ゲーム実行ファイルの保存
+- 自動または手動でログインフローを開始
+- ログイン成功を手動確認
+- 成功時刻、レジストリ token、device fingerprint の書き戻し
+
+## English
+
+This is a standalone Wails subproject focused on a minimal login flow.
+
+- Add, edit, delete, and reorder accounts
+- Save game executable paths
+- Start the login flow from automatic or manual entry points
+- Manually confirm login success
+- Write back the success timestamp, registry token, and device fingerprint
+
+## 한국어
+
+이 프로젝트는 최소 로그인 흐름에 집중한 독립형 Wails 서브프로젝트입니다.
+
+- 계정 추가, 수정, 삭제, 정렬
+- 게임 실행 파일 경로 저장
+- 자동 또는 수동 로그인 흐름 시작
+- 로그인 성공 수동 확인
+- 성공 시간, 레지스트리 token, device fingerprint 기록
+
+## Français
+
+Il s'agit d'un sous-projet Wails autonome centré sur un flux de connexion minimal.
+
+- Ajouter, modifier, supprimer et trier les comptes
+- Enregistrer le chemin de l'exécutable du jeu
+- Démarrer le flux de connexion en mode automatique ou manuel
+- Confirmer manuellement la réussite de la connexion
+- Réécrire l'horodatage de succès, le token du registre et l'empreinte d'appareil
+
+## Latine
+
+Hoc est subprojectum Wails separatum ad minimam rationem initus destinatum.
+
+- Rationes addere, recensere, delere, ordinare
+- Vias exsecutabiles ludorum servare
+- Processum initus automaticum vel manualem incipere
+- Successum initus manu confirmare
+- Tempus prosperum, token registri, et vestigium machinae rescribere
+
+ 
+ 
+ # MiHoYoStarterGo
 
 基于 `Go + Wails + Vue3` 的米哈游账号切换与登录辅助工具（本地离线 OCR）。  
 显著缺点是ocr方案识别速度较慢，（根据pc配置程度通常需要5-20s）。而且有时候会莫名其妙的识别不到（就很烦，不过动态画面时常会有类似的问题）。  
