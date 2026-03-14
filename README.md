@@ -78,6 +78,8 @@ Hoc est subprojectum Wails separatum ad minimam rationem initus destinatum.
 - Tempus prosperum, token registri, et vestigium machinae rescribere
 
  
+ ------------
+# ocr功能仅限于5.5及以前版本，新版无需频繁登陆，只需要保证每次换号成功登陆时点击手动保存即可更新登陆信息。三天内只要更新过一次账号登陆信息则不需要重新登陆。
  
  # MiHoYoStarterGo
 
